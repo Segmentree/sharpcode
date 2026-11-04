@@ -13,6 +13,7 @@ var dbPath = builder.Configuration["Database:Path"] ?? Path.Combine(builder.Envi
 builder.Services.AddDbContext<AppDbContext>(o => o.UseSqlite($"Data Source={dbPath}"));
 builder.Services.AddSingleton<Compiler>();
 builder.Services.AddSingleton<JudgeService>();
+builder.Services.AddSingleton<CodeCompletion>();
 builder.Services.ConfigureHttpJsonOptions(o =>
 {
     o.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
@@ -175,6 +176,11 @@ api.MapPost("/problems/{id:int}/submit", async (int id, CodeInput input, AppDbCo
     return Results.Ok(new SubmissionDto(submission.Id, submission.ProblemId, submission.Verdict, submission.PassedCount,
         submission.TotalCount, submission.CreatedAt, submission.Code, result));
 });
+
+// ---------- Editor support ----------
+
+api.MapPost("/complete", async (CompleteInput input, CodeCompletion completion, CancellationToken ct) =>
+    Results.Ok(await completion.CompleteAsync(input.Code ?? "", input.Position, ct)));
 
 api.MapGet("/problems/{id:int}/submissions", async (int id, AppDbContext db) =>
     await db.Submissions.Where(s => s.ProblemId == id).OrderByDescending(s => s.Id).Take(50)

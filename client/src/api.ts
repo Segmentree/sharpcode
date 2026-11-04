@@ -90,6 +90,17 @@ export interface Submission {
   result?: JudgeResult
 }
 
+export interface CompletionItem {
+  label: string
+  kind: string
+  detail?: string
+}
+
+export interface CompletionResponse {
+  from: number
+  items: CompletionItem[]
+}
+
 export class ApiError extends Error {
   status: number
   constructor(status: number, message: string) {
@@ -131,6 +142,8 @@ export const api = {
     request<Submission>(`/problems/${id}/submit`, { method: 'POST', body: JSON.stringify({ code }) }),
   listSubmissions: (id: number) => request<Submission[]>(`/problems/${id}/submissions`),
   getSubmission: (id: number) => request<Submission>(`/submissions/${id}`),
+  complete: (code: string, position: number, signal?: AbortSignal) =>
+    request<CompletionResponse>('/complete', { method: 'POST', body: JSON.stringify({ code, position }), signal }),
 }
 
 export const verdictLabel: Record<Verdict, string> = {

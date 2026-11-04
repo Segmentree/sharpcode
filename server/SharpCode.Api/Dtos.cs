@@ -30,6 +30,8 @@ public sealed record ProblemInput(
 
 public sealed record CodeInput([property: Required] string Code);
 
+public sealed record CompleteInput(string? Code, int Position);
+
 public sealed record SubmissionDto(int Id, int ProblemId, Verdict Verdict, int PassedCount, int TotalCount,
     DateTime CreatedAt, string Code, JudgeResult? Result);
 

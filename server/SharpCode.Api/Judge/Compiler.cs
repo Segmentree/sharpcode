@@ -15,14 +15,14 @@ public sealed record CompileOutcome(byte[]? Assembly, IReadOnlyList<CompileDiagn
 public sealed class Compiler
 {
     // Implicit usings so solutions read like LeetCode snippets; explicit duplicates in user code are harmless.
-    private const string GlobalUsings = """
+    public const string GlobalUsings = """
         global using System;
         global using System.Collections.Generic;
         global using System.Linq;
         global using System.Text;
         """;
 
-    private static readonly Lazy<ImmutableArray<MetadataReference>> References = new(LoadReferences);
+    public static readonly Lazy<ImmutableArray<MetadataReference>> References = new(LoadReferences);
 
     private static ImmutableArray<MetadataReference> LoadReferences()
     {

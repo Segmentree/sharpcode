@@ -1,0 +1,4 @@
+# Proxy the API so the browser only talks to one origin.
+/api/*  https://sharpcode-api.fly.dev/api/:splat  200!
+# SPA fallback for vue-router history mode.
+/*      /index.html  200

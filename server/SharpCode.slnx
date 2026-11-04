@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="SharpCode.Api/SharpCode.Api.csproj" />
+  <Project Path="SharpCode.Runner/SharpCode.Runner.csproj" />
+</Solution>

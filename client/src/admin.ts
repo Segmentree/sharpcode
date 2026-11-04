@@ -10,9 +10,15 @@ function readStored(): string {
   }
 }
 
+/**
+ * Problem authoring is a local-only workflow: the admin page, the problem editor and the edit/delete controls
+ * exist in development builds and are compiled out of production builds entirely.
+ */
+export const ADMIN_UI_ENABLED: boolean = import.meta.env.DEV
+
 /** Admin token for this browser. Empty string means not signed in. */
-export const adminToken = ref<string>(readStored())
-export const isAdmin = computed(() => adminToken.value.length > 0)
+export const adminToken = ref<string>(ADMIN_UI_ENABLED ? readStored() : '')
+export const isAdmin = computed(() => ADMIN_UI_ENABLED && adminToken.value.length > 0)
 
 export function setAdminToken(token: string) {
   adminToken.value = token

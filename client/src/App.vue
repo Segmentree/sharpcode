@@ -2,7 +2,7 @@
 import { RouterLink, RouterView } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { locale, setLocale, SUPPORTED_LOCALES, type Locale } from './locale'
-import { isAdmin } from './admin'
+import { ADMIN_UI_ENABLED, isAdmin } from './admin'
 
 const { t } = useI18n()
 
@@ -21,7 +21,7 @@ function choose(l: Locale) {
         <RouterLink v-if="isAdmin" to="/problems/new">{{ t('nav.newProblem') }}</RouterLink>
       </nav>
       <span class="spacer"></span>
-      <RouterLink to="/admin" class="admin-link" :class="{ on: isAdmin }">
+      <RouterLink v-if="ADMIN_UI_ENABLED" to="/admin" class="admin-link" :class="{ on: isAdmin }">
         {{ isAdmin ? t('nav.adminSignedIn') : t('nav.admin') }}
       </RouterLink>
       <div class="lang" role="group" :aria-label="t('nav.language')">

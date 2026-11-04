@@ -27,6 +27,7 @@ app.UseCors();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    RetireLegacyDatabase(dbPath, app.Logger);
     db.Database.Migrate();
     Seed.Apply(db, app.Logger);
     if (string.IsNullOrEmpty(app.Configuration["Admin:Token"]))
@@ -156,6 +157,32 @@ api.MapPost("/sandbox/run", async (SandboxInput input, SandboxService sandbox, C
 });
 
 app.Run();
+
+/// <summary>
+/// Databases created before EF migrations were introduced (EnsureCreated) have the tables but no migration
+/// history, so Migrate() would fail. Such a file is renamed aside once and a fresh database is created.
+/// </summary>
+static void RetireLegacyDatabase(string dbPath, ILogger logger)
+{
+    if (!File.Exists(dbPath)) return;
+    var tables = new HashSet<string>();
+    // Pooling=false so the probe's file handle is really closed before the file is moved.
+    using (var conn = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={dbPath};Pooling=false"))
+    {
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('Problems','__EFMigrationsHistory')";
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read()) tables.Add(reader.GetString(0));
+    }
+    if (!tables.Contains("Problems") || tables.Contains("__EFMigrationsHistory")) return;
+
+    var retired = $"{dbPath}.legacy-{DateTime.UtcNow:yyyyMMddHHmmss}";
+    File.Move(dbPath, retired);
+    foreach (var suffix in new[] { "-shm", "-wal" })
+        if (File.Exists(dbPath + suffix)) File.Move(dbPath + suffix, retired + suffix);
+    logger.LogWarning("Legacy database without migration history moved to {Path}; starting fresh", retired);
+}
 
 static async Task<Problem?> FindProblem(AppDbContext db, string idOrSlug)
 {

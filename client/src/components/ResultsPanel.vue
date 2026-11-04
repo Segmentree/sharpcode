@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { JudgeResult, TestCaseResult } from '../api'
-import { verdictLabel } from '../api'
+import { verdictKey } from '../api'
 
 defineProps<{ result: JudgeResult; mode: 'run' | 'submit' }>()
+const { t } = useI18n()
 
 const open = ref<Record<number, boolean>>({})
 function toggle(r: TestCaseResult) {
@@ -17,17 +19,18 @@ function isOpen(r: TestCaseResult, index: number) {
 <template>
   <div class="results">
     <div class="summary">
-      <span class="verdict" :class="result.verdict">{{ verdictLabel[result.verdict] }}</span>
+      <span class="verdict" :class="result.verdict">{{ t(verdictKey(result.verdict)) }}</span>
       <span class="muted">{{ result.message }}</span>
       <span class="spacer"></span>
       <span class="muted small">
-        {{ mode === 'run' ? 'sample cases' : 'all cases' }} · {{ result.totalDurationMs.toFixed(0) }} ms
+        {{ mode === 'run' ? t('results.sampleCases') : t('results.allCases') }} ·
+        {{ t('results.ms', { n: result.totalDurationMs.toFixed(0) }) }}
       </span>
     </div>
 
     <div v-if="result.diagnostics.length" class="diagnostics">
       <div v-for="(d, i) in result.diagnostics" :key="i" class="diag" :class="{ err: d.isError }">
-        <span class="loc">Line {{ d.line }}:{{ d.column }}</span>
+        <span class="loc">{{ t('results.line', { line: d.line, col: d.column }) }}</span>
         <span class="code">{{ d.code }}</span>
         <span>{{ d.message }}</span>
       </div>
@@ -40,24 +43,24 @@ function isOpen(r: TestCaseResult, index: number) {
         class="case"
         :class="{ passed: r.passed, failed: !r.passed }"
       >
-        <button class="case-head" @click="toggle(r)">
+        <button type="button" class="case-head" @click="toggle(r)">
           <span class="dot"></span>
-          <span>Case {{ i + 1 }}<span v-if="r.isHidden" class="muted"> (hidden)</span></span>
+          <span>{{ t('problem.case', { n: i + 1 }) }}<span v-if="r.isHidden" class="muted"> {{ t('results.hidden') }}</span></span>
           <span class="spacer"></span>
-          <span class="muted small">{{ r.durationMs.toFixed(1) }} ms</span>
+          <span class="muted small">{{ t('results.ms', { n: r.durationMs.toFixed(1) }) }}</span>
           <span class="chev">{{ isOpen(r, i) ? '▾' : '▸' }}</span>
         </button>
         <div v-if="isOpen(r, i)" class="case-body">
           <template v-if="r.input !== undefined">
-            <div class="field"><label>Input</label><pre>{{ r.input }}</pre></div>
-            <div class="field"><label>Expected</label><pre>{{ r.expected }}</pre></div>
+            <div class="field"><label>{{ t('problem.input') }}</label><pre>{{ r.input }}</pre></div>
+            <div class="field"><label>{{ t('problem.expected') }}</label><pre>{{ r.expected }}</pre></div>
             <div v-if="r.actual !== undefined" class="field">
-              <label>Output</label><pre :class="{ bad: !r.passed }">{{ r.actual }}</pre>
+              <label>{{ t('problem.output') }}</label><pre :class="{ bad: !r.passed }">{{ r.actual }}</pre>
             </div>
-            <div v-if="r.stdout" class="field"><label>Stdout</label><pre>{{ r.stdout }}</pre></div>
+            <div v-if="r.stdout" class="field"><label>{{ t('problem.stdout') }}</label><pre>{{ r.stdout }}</pre></div>
           </template>
-          <p v-else class="muted small">Hidden test case: input and expected output are not shown.</p>
-          <div v-if="r.error" class="field"><label>Error</label><pre class="bad">{{ r.error }}</pre></div>
+          <p v-else class="muted small">{{ t('results.hiddenDetails') }}</p>
+          <div v-if="r.error" class="field"><label>{{ t('problem.error') }}</label><pre class="bad">{{ r.error }}</pre></div>
         </div>
       </div>
     </div>
@@ -66,10 +69,10 @@ function isOpen(r: TestCaseResult, index: number) {
 
 <style scoped>
 .results { display: flex; flex-direction: column; gap: 0.75rem; }
-.summary { display: flex; align-items: center; gap: 0.75rem; }
+.summary { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
 .small { font-size: 0.82rem; }
 .diagnostics { display: flex; flex-direction: column; gap: 0.3rem; }
-.diag { display: flex; gap: 0.6rem; font-family: var(--mono); font-size: 0.85rem; padding: 0.4rem 0.6rem; border-radius: 6px; background: var(--panel-2); }
+.diag { display: flex; gap: 0.6rem; font-family: var(--mono); font-size: 0.85rem; padding: 0.4rem 0.6rem; border-radius: 6px; background: var(--panel-2); flex-wrap: wrap; }
 .diag.err { color: var(--red); background: rgba(255, 107, 107, 0.08); }
 .diag .loc { color: var(--muted); min-width: 6rem; }
 .diag .code { color: var(--amber); }

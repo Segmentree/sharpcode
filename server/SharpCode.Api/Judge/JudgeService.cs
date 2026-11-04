@@ -12,7 +12,7 @@ namespace SharpCode.Api.Judge;
 public sealed class JudgeService(Compiler compiler, ILogger<JudgeService> logger)
 {
     private static readonly string RunnerDll = Path.Combine(AppContext.BaseDirectory, "SharpCode.Runner.dll");
-    private static readonly string DotnetHost = GetDotnetHost();
+    internal static readonly string DotnetHost = GetDotnetHost();
 
     public async Task<JudgeResult> JudgeAsync(Problem problem, IReadOnlyList<TestCase> cases, string code,
         bool revealHidden, CancellationToken ct)

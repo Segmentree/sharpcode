@@ -40,7 +40,8 @@ public sealed class Compiler
             .ToImmutableArray();
     }
 
-    public CompileOutcome Compile(string source, string assemblyName)
+    /// <param name="console">Emit a console application (needs an entry point) instead of a class library.</param>
+    public CompileOutcome Compile(string source, string assemblyName, bool console = false)
     {
         var parseOptions = new CSharpParseOptions(LanguageVersion.Latest);
         var trees = new[]
@@ -48,7 +49,7 @@ public sealed class Compiler
             CSharpSyntaxTree.ParseText(source, parseOptions, path: "Solution.cs"),
             CSharpSyntaxTree.ParseText(GlobalUsings, parseOptions, path: "GlobalUsings.cs"),
         };
-        var options = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary,
+        var options = new CSharpCompilationOptions(console ? OutputKind.ConsoleApplication : OutputKind.DynamicallyLinkedLibrary,
             optimizationLevel: OptimizationLevel.Release,
             nullableContextOptions: NullableContextOptions.Enable,
             allowUnsafe: false,

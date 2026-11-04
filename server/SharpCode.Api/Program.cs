@@ -1,7 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SharpCode.Api;
 using SharpCode.Api.Data;
@@ -14,6 +13,7 @@ builder.Services.AddDbContext<AppDbContext>(o => o.UseSqlite($"Data Source={dbPa
 builder.Services.AddSingleton<Compiler>();
 builder.Services.AddSingleton<JudgeService>();
 builder.Services.AddSingleton<CodeCompletion>();
+builder.Services.AddSingleton<SandboxService>();
 builder.Services.ConfigureHttpJsonOptions(o =>
 {
     o.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
@@ -27,123 +27,75 @@ app.UseCors();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    db.Database.EnsureCreated();
-    Seed.Apply(db);
+    db.Database.Migrate();
+    Seed.Apply(db, app.Logger);
+    if (string.IsNullOrEmpty(app.Configuration["Admin:Token"]))
+        app.Logger.LogWarning("Admin:Token is not configured; problem editing is disabled");
 }
 
 var api = app.MapGroup("/api");
 
+// ---------- Admin ----------
+
+api.MapGet("/admin/check", () => Results.Ok(new { ok = true })).RequireAdmin();
+
 // ---------- Problems ----------
 
-api.MapGet("/problems", async (AppDbContext db) =>
+api.MapGet("/problems", async (string? lang, AppDbContext db) =>
 {
     var solved = await db.Submissions.Where(s => s.Verdict == Verdict.Accepted).Select(s => s.ProblemId).Distinct().ToListAsync();
-    var problems = await db.Problems.OrderBy(p => p.Id)
-        .Select(p => new ProblemSummaryDto(p.Id, p.Slug, p.Title, p.Difficulty, p.TestCases.Count, false))
-        .ToListAsync();
-    return problems.Select(p => p with { Solved = solved.Contains(p.Id) });
+    var problems = await db.Problems.Include(p => p.Translations).Include(p => p.TestCases).OrderBy(p => p.Id).ToListAsync();
+    return problems.Select(p => new ProblemSummaryDto(p.Id, p.Slug, Mapping.Localize(p, lang).Title, p.Difficulty, p.Category,
+        p.TestCases.Count, solved.Contains(p.Id)));
 });
 
-api.MapGet("/problems/{idOrSlug}", async (string idOrSlug, AppDbContext db) =>
+api.MapGet("/problems/{idOrSlug}", async (string idOrSlug, string? lang, AppDbContext db) =>
 {
     var p = await FindProblem(db, idOrSlug);
-    return p is null ? Results.NotFound() : Results.Ok(p.ToDto(includeHiddenDetails: false));
+    return p is null ? Results.NotFound() : Results.Ok(p.ToDto(includeHiddenDetails: false, lang));
 });
 
-// Admin view: includes the hidden test cases' input/expected.
+// Admin view: hidden test case details and every translation.
 api.MapGet("/problems/{idOrSlug}/full", async (string idOrSlug, AppDbContext db) =>
 {
     var p = await FindProblem(db, idOrSlug);
-    return p is null ? Results.NotFound() : Results.Ok(p.ToDto(includeHiddenDetails: true));
-});
+    return p is null ? Results.NotFound() : Results.Ok(p.ToDto(includeHiddenDetails: true, lang: null, includeTranslations: true));
+}).RequireAdmin();
 
 api.MapPost("/problems", async (ProblemInput input, AppDbContext db) =>
 {
-    if (Validate(input) is { } error) return Results.BadRequest(new { error });
+    if (Validate(input, requireTestCases: true) is { } error) return Results.BadRequest(new { error });
     var slug = string.IsNullOrWhiteSpace(input.Slug) ? Mapping.Slugify(input.Title) : Mapping.Slugify(input.Slug);
     if (await db.Problems.AnyAsync(p => p.Slug == slug)) return Results.Conflict(new { error = $"Slug '{slug}' already exists." });
 
-    var problem = new Problem
-    {
-        Slug = slug, Title = input.Title.Trim(), Description = input.Description, Difficulty = input.Difficulty,
-        StarterCode = input.StarterCode, MethodName = input.MethodName.Trim(),
-        ClassName = string.IsNullOrWhiteSpace(input.ClassName) ? "Solution" : input.ClassName.Trim(),
-        TimeLimitMs = input.TimeLimitMs ?? 2000,
-        TestCases = (input.TestCases ?? []).Select((t, i) => new TestCase
-            { Input = t.Input, Expected = t.Expected, IsHidden = t.IsHidden, Order = i }).ToList(),
-    };
+    var problem = new Problem { Slug = slug, Title = "", Description = "", StarterCode = "", MethodName = "" };
+    ApplyInput(problem, input);
     db.Problems.Add(problem);
     await db.SaveChangesAsync();
-    return Results.Created($"/api/problems/{problem.Id}", problem.ToDto(includeHiddenDetails: true));
-});
+    return Results.Created($"/api/problems/{problem.Id}", problem.ToDto(includeHiddenDetails: true, lang: null, includeTranslations: true));
+}).RequireAdmin();
 
 api.MapPut("/problems/{id:int}", async (int id, ProblemInput input, AppDbContext db) =>
 {
-    if (Validate(input) is { } error) return Results.BadRequest(new { error });
-    var problem = await db.Problems.Include(p => p.TestCases).FirstOrDefaultAsync(p => p.Id == id);
+    if (Validate(input, requireTestCases: false) is { } error) return Results.BadRequest(new { error });
+    var problem = await db.Problems.Include(p => p.TestCases).Include(p => p.Translations).FirstOrDefaultAsync(p => p.Id == id);
     if (problem is null) return Results.NotFound();
     var slug = string.IsNullOrWhiteSpace(input.Slug) ? problem.Slug : Mapping.Slugify(input.Slug);
     if (await db.Problems.AnyAsync(p => p.Slug == slug && p.Id != id)) return Results.Conflict(new { error = $"Slug '{slug}' already exists." });
 
     problem.Slug = slug;
-    problem.Title = input.Title.Trim();
-    problem.Description = input.Description;
-    problem.Difficulty = input.Difficulty;
-    problem.StarterCode = input.StarterCode;
-    problem.MethodName = input.MethodName.Trim();
-    problem.ClassName = string.IsNullOrWhiteSpace(input.ClassName) ? "Solution" : input.ClassName.Trim();
-    problem.TimeLimitMs = input.TimeLimitMs ?? problem.TimeLimitMs;
-    if (input.TestCases is not null)
-    {
-        // Replace the whole set: simplest consistent semantics for an editor that submits the full list.
-        db.TestCases.RemoveRange(problem.TestCases);
-        problem.TestCases = input.TestCases.Select((t, i) => new TestCase
-            { Input = t.Input, Expected = t.Expected, IsHidden = t.IsHidden, Order = i }).ToList();
-    }
+    if (input.TestCases is not null) db.TestCases.RemoveRange(problem.TestCases);
+    db.ProblemTranslations.RemoveRange(problem.Translations);
+    ApplyInput(problem, input);
     await db.SaveChangesAsync();
-    return Results.Ok(problem.ToDto(includeHiddenDetails: true));
-});
+    return Results.Ok(problem.ToDto(includeHiddenDetails: true, lang: null, includeTranslations: true));
+}).RequireAdmin();
 
 api.MapDelete("/problems/{id:int}", async (int id, AppDbContext db) =>
 {
     var deleted = await db.Problems.Where(p => p.Id == id).ExecuteDeleteAsync();
     return deleted == 0 ? Results.NotFound() : Results.NoContent();
-});
-
-// ---------- Test cases ----------
-
-api.MapPost("/problems/{id:int}/testcases", async (int id, TestCaseInput input, AppDbContext db) =>
-{
-    if (ValidateTestCase(input) is { } error) return Results.BadRequest(new { error });
-    var problem = await db.Problems.Include(p => p.TestCases).FirstOrDefaultAsync(p => p.Id == id);
-    if (problem is null) return Results.NotFound();
-    var tc = new TestCase
-    {
-        Input = input.Input, Expected = input.Expected, IsHidden = input.IsHidden,
-        Order = problem.TestCases.Count == 0 ? 0 : problem.TestCases.Max(t => t.Order) + 1,
-    };
-    problem.TestCases.Add(tc);
-    await db.SaveChangesAsync();
-    return Results.Created($"/api/testcases/{tc.Id}", tc.ToDto(true));
-});
-
-api.MapPut("/testcases/{id:int}", async (int id, TestCaseInput input, AppDbContext db) =>
-{
-    if (ValidateTestCase(input) is { } error) return Results.BadRequest(new { error });
-    var tc = await db.TestCases.FindAsync(id);
-    if (tc is null) return Results.NotFound();
-    tc.Input = input.Input;
-    tc.Expected = input.Expected;
-    tc.IsHidden = input.IsHidden;
-    await db.SaveChangesAsync();
-    return Results.Ok(tc.ToDto(true));
-});
-
-api.MapDelete("/testcases/{id:int}", async (int id, AppDbContext db) =>
-{
-    var deleted = await db.TestCases.Where(t => t.Id == id).ExecuteDeleteAsync();
-    return deleted == 0 ? Results.NotFound() : Results.NoContent();
-});
+}).RequireAdmin();
 
 // ---------- Judge ----------
 
@@ -177,11 +129,6 @@ api.MapPost("/problems/{id:int}/submit", async (int id, CodeInput input, AppDbCo
         submission.TotalCount, submission.CreatedAt, submission.Code, result));
 });
 
-// ---------- Editor support ----------
-
-api.MapPost("/complete", async (CompleteInput input, CodeCompletion completion, CancellationToken ct) =>
-    Results.Ok(await completion.CompleteAsync(input.Code ?? "", input.Position, ct)));
-
 api.MapGet("/problems/{id:int}/submissions", async (int id, AppDbContext db) =>
     await db.Submissions.Where(s => s.ProblemId == id).OrderByDescending(s => s.Id).Take(50)
         .Select(s => new SubmissionDto(s.Id, s.ProblemId, s.Verdict, s.PassedCount, s.TotalCount, s.CreatedAt, s.Code, null))
@@ -195,22 +142,72 @@ api.MapGet("/submissions/{id:int}", async (int id, AppDbContext db) =>
     return Results.Ok(new SubmissionDto(s.Id, s.ProblemId, s.Verdict, s.PassedCount, s.TotalCount, s.CreatedAt, s.Code, result));
 });
 
+// ---------- Editor support ----------
+
+api.MapPost("/complete", async (CompleteInput input, CodeCompletion completion, CancellationToken ct) =>
+    Results.Ok(await completion.CompleteAsync(input.Code ?? "", input.Position, ct)));
+
+// ---------- Sandbox ----------
+
+api.MapPost("/sandbox/run", async (SandboxInput input, SandboxService sandbox, CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(input.Code)) return Results.BadRequest(new { error = "Code is required." });
+    return Results.Ok(await sandbox.RunAsync(input.Code, input.Stdin ?? "", ct));
+});
+
 app.Run();
 
-static async Task<Problem?> FindProblem(AppDbContext db, string idOrSlug) =>
-    int.TryParse(idOrSlug, out var id)
-        ? await db.Problems.Include(p => p.TestCases).FirstOrDefaultAsync(p => p.Id == id)
-        : await db.Problems.Include(p => p.TestCases).FirstOrDefaultAsync(p => p.Slug == idOrSlug);
+static async Task<Problem?> FindProblem(AppDbContext db, string idOrSlug)
+{
+    var query = db.Problems.Include(p => p.TestCases).Include(p => p.Translations);
+    return int.TryParse(idOrSlug, out var id)
+        ? await query.FirstOrDefaultAsync(p => p.Id == id)
+        : await query.FirstOrDefaultAsync(p => p.Slug == idOrSlug);
+}
 
-static string? Validate(ProblemInput input)
+static void ApplyInput(Problem problem, ProblemInput input)
+{
+    problem.Title = input.Title.Trim();
+    problem.Description = input.Description;
+    problem.Difficulty = input.Difficulty;
+    problem.Category = input.Category;
+    problem.StarterCode = input.StarterCode;
+    problem.MethodName = input.MethodName.Trim();
+    problem.ClassName = string.IsNullOrWhiteSpace(input.ClassName) ? "Solution" : input.ClassName.Trim();
+    problem.TimeLimitMs = input.TimeLimitMs ?? problem.TimeLimitMs;
+    if (input.TestCases is not null)
+        problem.TestCases = input.TestCases.Select((t, i) => new TestCase
+            { Input = t.Input, Expected = t.Expected, IsHidden = t.IsHidden, Order = i }).ToList();
+    problem.Translations = (input.Translations ?? [])
+        .Where(kv => !string.IsNullOrWhiteSpace(kv.Value.Title) || !string.IsNullOrWhiteSpace(kv.Value.Description))
+        .Select(kv => new ProblemTranslation
+        {
+            Locale = kv.Key.Trim().ToLowerInvariant(),
+            Title = string.IsNullOrWhiteSpace(kv.Value.Title) ? input.Title.Trim() : kv.Value.Title.Trim(),
+            Description = string.IsNullOrWhiteSpace(kv.Value.Description) ? input.Description : kv.Value.Description,
+        }).ToList();
+}
+
+static string? Validate(ProblemInput input, bool requireTestCases)
 {
     if (string.IsNullOrWhiteSpace(input.Title)) return "Title is required.";
     if (string.IsNullOrWhiteSpace(input.Description)) return "Description is required.";
     if (string.IsNullOrWhiteSpace(input.StarterCode)) return "Starter code is required.";
     if (string.IsNullOrWhiteSpace(input.MethodName)) return "Method name is required.";
     if (input.TimeLimitMs is < 100 or > 30_000) return "Time limit must be between 100 and 30000 ms.";
-    foreach (var (t, i) in (input.TestCases ?? []).Select((t, i) => (t, i)))
+    if (!Enum.IsDefined(input.Category)) return "Category must be School or Gym.";
+    if (!Enum.IsDefined(input.Difficulty)) return "Difficulty must be Easy, Medium or Hard.";
+    if (input.TestCases is null)
+        return requireTestCases ? "Test cases are required." : null;
+
+    var visible = input.TestCases.Count(t => !t.IsHidden);
+    var hidden = input.TestCases.Count(t => t.IsHidden);
+    if (visible != Mapping.VisibleCases || hidden != Mapping.HiddenCases)
+        return $"A problem needs exactly {Mapping.VisibleCases} visible and {Mapping.HiddenCases} hidden test cases (got {visible} visible, {hidden} hidden).";
+    foreach (var (t, i) in input.TestCases.Select((t, i) => (t, i)))
         if (ValidateTestCase(t) is { } error) return $"Test case {i + 1}: {error}";
+    foreach (var (locale, _) in input.Translations ?? [])
+        if (locale.Trim().Length is < 2 or > 5) return $"Translation locale '{locale}' is not valid.";
     return null;
 }
 

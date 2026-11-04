@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { api, verdictLabel, type JudgeResult, type Problem, type Submission } from '../api'
+import { useI18n } from 'vue-i18n'
+import { api, verdictKey, type JudgeResult, type Problem, type Submission } from '../api'
+import { locale } from '../locale'
 import CodeEditor from '../components/CodeEditor.vue'
 import MarkdownView from '../components/MarkdownView.vue'
 import ResultsPanel from '../components/ResultsPanel.vue'
 import DifficultyBadge from '../components/DifficultyBadge.vue'
 
 const props = defineProps<{ slug: string }>()
+const { t } = useI18n()
 
 const problem = ref<Problem | null>(null)
 const code = ref('')
@@ -21,6 +24,7 @@ const tab = ref<'description' | 'submissions'>('description')
 const draftKey = computed(() => (problem.value ? `sharpcode:draft:${problem.value.id}` : ''))
 const sampleCases = computed(() => problem.value?.testCases.filter((t) => !t.isHidden) ?? [])
 const hiddenCount = computed(() => problem.value?.testCases.filter((t) => t.isHidden).length ?? 0)
+const usings = 'System, System.Collections.Generic, System.Linq, System.Text'
 
 async function load() {
   loading.value = true
@@ -43,6 +47,17 @@ async function load() {
   }
 }
 
+/** Locale change: refresh only the localized text, keep code and results. */
+async function reloadText() {
+  if (!problem.value) return
+  try {
+    const fresh = await api.getProblem(props.slug)
+    problem.value = { ...fresh }
+  } catch (e) {
+    error.value = (e as Error).message
+  }
+}
+
 watch(code, (value) => {
   if (!draftKey.value) return
   try {
@@ -55,6 +70,7 @@ watch(code, (value) => {
 async function run() {
   if (!problem.value) return
   busy.value = 'run'
+  error.value = null
   try {
     result.value = await api.run(problem.value.id, code.value)
     resultMode.value = 'run'
@@ -68,6 +84,7 @@ async function run() {
 async function submit() {
   if (!problem.value) return
   busy.value = 'submit'
+  error.value = null
   try {
     const s = await api.submit(problem.value.id, code.value)
     result.value = s.result ?? null
@@ -82,35 +99,40 @@ async function submit() {
 
 function reset() {
   if (!problem.value) return
-  if (!confirm('Replace your code with the starter code?')) return
+  if (!confirm(t('problem.confirmReset'))) return
   code.value = problem.value.starterCode
 }
 
 async function openSubmission(s: Submission) {
-  const full = await api.getSubmission(s.id)
-  code.value = full.code
-  result.value = full.result ?? null
-  resultMode.value = 'submit'
+  try {
+    const full = await api.getSubmission(s.id)
+    code.value = full.code
+    result.value = full.result ?? null
+    resultMode.value = 'submit'
+  } catch (e) {
+    error.value = (e as Error).message
+  }
 }
 
 function fmtDate(iso: string) {
-  return new Date(iso).toLocaleString()
+  return new Date(iso).toLocaleString(locale.value)
 }
 
 onMounted(load)
 watch(() => props.slug, load)
+watch(locale, reloadText)
 </script>
 
 <template>
-  <div v-if="loading" class="centered muted">Loading…</div>
-  <div v-else-if="!problem" class="centered error">{{ error ?? 'Problem not found.' }}</div>
+  <div v-if="loading" class="centered muted">{{ t('app.loading') }}</div>
+  <div v-else-if="!problem" class="centered error">{{ error ?? t('problem.notFound') }}</div>
 
   <div v-else class="workspace">
     <section class="pane left panel">
       <div class="tabs">
-        <button :class="{ active: tab === 'description' }" @click="tab = 'description'">Description</button>
-        <button :class="{ active: tab === 'submissions' }" @click="tab = 'submissions'">
-          Submissions <span class="muted">({{ submissions.length }})</span>
+        <button type="button" :class="{ active: tab === 'description' }" @click="tab = 'description'">{{ t('problem.description') }}</button>
+        <button type="button" :class="{ active: tab === 'submissions' }" @click="tab = 'submissions'">
+          {{ t('problem.submissions') }} <span class="muted">({{ submissions.length }})</span>
         </button>
       </div>
 
@@ -118,42 +140,40 @@ watch(() => props.slug, load)
         <div class="row title">
           <h2>{{ problem.title }}</h2>
           <DifficultyBadge :difficulty="problem.difficulty" />
+          <span class="badge cat">{{ t(`category.${problem.category}`) }}</span>
         </div>
         <MarkdownView :source="problem.description" />
 
-        <h3 class="section-title">Sample test cases</h3>
-        <div v-for="(t, i) in sampleCases" :key="t.id" class="sample">
-          <div class="muted small">Case {{ i + 1 }}</div>
+        <h3 class="section-title">{{ t('problem.sampleCases') }}</h3>
+        <div v-for="(tc, i) in sampleCases" :key="tc.id" class="sample">
+          <div class="muted small">{{ t('problem.case', { n: i + 1 }) }}</div>
           <div class="sample-grid">
-            <label>Input</label><pre>{{ t.input }}</pre>
-            <label>Expected</label><pre>{{ t.expected }}</pre>
+            <label>{{ t('problem.input') }}</label><pre>{{ tc.input }}</pre>
+            <label>{{ t('problem.expected') }}</label><pre>{{ tc.expected }}</pre>
           </div>
         </div>
-        <p v-if="hiddenCount" class="muted small">
-          Plus {{ hiddenCount }} hidden test case{{ hiddenCount === 1 ? '' : 's' }} evaluated on submit.
-        </p>
+        <p v-if="hiddenCount" class="muted small">{{ t('problem.hiddenNote', { n: hiddenCount }, hiddenCount) }}</p>
 
-        <h3 class="section-title">Contract</h3>
-        <p class="muted small">
-          The judge calls <code>{{ problem.className }}.{{ problem.methodName }}(…)</code> with each test case's
-          arguments and compares the returned value to the expected output (JSON equality). Time limit:
-          {{ problem.timeLimitMs }} ms per case. <code>System</code>, <code>System.Collections.Generic</code>,
-          <code>System.Linq</code> and <code>System.Text</code> are imported for you.
-        </p>
+        <h3 class="section-title">{{ t('problem.contract') }}</h3>
+        <i18n-t keypath="problem.contractText" tag="p" class="muted small">
+          <template #signature><code>{{ problem.className }}.{{ problem.methodName }}(…)</code></template>
+          <template #ms>{{ problem.timeLimitMs }}</template>
+          <template #usings><code>{{ usings }}</code></template>
+        </i18n-t>
       </div>
 
       <div v-else class="pane-body">
-        <p v-if="submissions.length === 0" class="muted">No submissions yet.</p>
+        <p v-if="submissions.length === 0" class="muted">{{ t('problem.noSubmissions') }}</p>
         <table v-else class="subs">
           <thead>
-            <tr><th>Verdict</th><th>Passed</th><th>When</th><th></th></tr>
+            <tr><th>{{ t('problem.colVerdict') }}</th><th>{{ t('problem.colPassed') }}</th><th>{{ t('problem.colWhen') }}</th><th></th></tr>
           </thead>
           <tbody>
             <tr v-for="s in submissions" :key="s.id">
-              <td><span class="verdict" :class="s.verdict">{{ verdictLabel[s.verdict] }}</span></td>
+              <td><span class="verdict" :class="s.verdict">{{ t(verdictKey(s.verdict)) }}</span></td>
               <td class="muted">{{ s.passedCount }}/{{ s.totalCount }}</td>
               <td class="muted small">{{ fmtDate(s.createdAt) }}</td>
-              <td><button class="sm" @click="openSubmission(s)">Load</button></td>
+              <td><button type="button" class="sm" @click="openSubmission(s)">{{ t('problem.load') }}</button></td>
             </tr>
           </tbody>
         </table>
@@ -163,14 +183,14 @@ watch(() => props.slug, load)
     <section class="pane right">
       <div class="editor panel">
         <div class="toolbar">
-          <span class="muted small">C#</span>
+          <span class="muted small">{{ t('problem.language') }}</span>
           <span class="spacer"></span>
-          <button class="sm" @click="reset">Reset</button>
-          <button class="sm" :disabled="busy !== null" @click="run">
-            {{ busy === 'run' ? 'Running…' : 'Run' }}
+          <button type="button" class="sm" @click="reset">{{ t('problem.reset') }}</button>
+          <button type="button" class="sm" :disabled="busy !== null" @click="run">
+            {{ busy === 'run' ? t('problem.running') : t('problem.run') }}
           </button>
-          <button class="sm primary" :disabled="busy !== null" @click="submit">
-            {{ busy === 'submit' ? 'Judging…' : 'Submit' }}
+          <button type="button" class="sm primary" :disabled="busy !== null" @click="submit">
+            {{ busy === 'submit' ? t('problem.judging') : t('problem.submit') }}
           </button>
         </div>
         <div class="editor-body">
@@ -179,14 +199,15 @@ watch(() => props.slug, load)
       </div>
 
       <div class="output panel">
-        <div class="toolbar"><span class="muted small">Results</span></div>
+        <div class="toolbar"><span class="muted small">{{ t('problem.results') }}</span></div>
         <div class="output-body">
           <p v-if="error" class="error">{{ error }}</p>
           <ResultsPanel v-if="result" :result="result" :mode="resultMode" />
-          <p v-else-if="!busy" class="muted small">
-            Press <b>Run</b> to check the sample cases, or <b>Submit</b> to judge against every test case.
-          </p>
-          <p v-else class="muted small">Compiling and running…</p>
+          <i18n-t v-else-if="!busy" keypath="problem.hint" tag="p" class="muted small">
+            <template #run><b>{{ t('problem.run') }}</b></template>
+            <template #submit><b>{{ t('problem.submit') }}</b></template>
+          </i18n-t>
+          <p v-else class="muted small">{{ t('problem.compiling') }}</p>
         </div>
       </div>
     </section>
@@ -209,8 +230,9 @@ watch(() => props.slug, load)
 .tabs { display: flex; border-bottom: 1px solid var(--border); padding: 0 0.5rem; }
 .tabs button { background: transparent; border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 0.6rem 0.75rem; color: var(--muted); }
 .tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
-.title { margin-bottom: 0.75rem; }
+.title { margin-bottom: 0.75rem; flex-wrap: wrap; }
 .title h2 { margin: 0; }
+.badge.cat { color: var(--accent); background: rgba(124, 156, 255, 0.12); }
 .section-title { margin-top: 1.5rem; font-size: 0.95rem; }
 .small { font-size: 0.82rem; }
 .sample { margin-bottom: 0.75rem; }

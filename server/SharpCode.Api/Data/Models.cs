@@ -2,6 +2,8 @@ namespace SharpCode.Api.Data;
 
 public enum Difficulty { Easy = 1, Medium = 2, Hard = 3 }
 
+public enum ProblemCategory { School = 1, Gym = 2 }
+
 public sealed class Problem
 {
     public int Id { get; set; }
@@ -10,6 +12,7 @@ public sealed class Problem
     /// <summary>Markdown statement shown to the user.</summary>
     public required string Description { get; set; }
     public Difficulty Difficulty { get; set; } = Difficulty.Easy;
+    public ProblemCategory Category { get; set; } = ProblemCategory.Gym;
     /// <summary>Code pre-filled in the editor.</summary>
     public required string StarterCode { get; set; }
     /// <summary>Class the judge instantiates. Defaults to "Solution".</summary>
@@ -20,6 +23,19 @@ public sealed class Problem
     public int TimeLimitMs { get; set; } = 2000;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public List<TestCase> TestCases { get; set; } = [];
+    /// <summary>Title/description in other languages. Title and Description on the problem itself are English.</summary>
+    public List<ProblemTranslation> Translations { get; set; } = [];
+}
+
+public sealed class ProblemTranslation
+{
+    public int Id { get; set; }
+    public int ProblemId { get; set; }
+    public Problem? Problem { get; set; }
+    /// <summary>Two-letter language code, e.g. "es".</summary>
+    public required string Locale { get; set; }
+    public required string Title { get; set; }
+    public required string Description { get; set; }
 }
 
 public sealed class TestCase

@@ -1,4 +1,8 @@
+import { locale } from './locale'
+import { adminToken, clearAdminToken } from './admin'
+
 export type Difficulty = 'Easy' | 'Medium' | 'Hard'
+export type Category = 'School' | 'Gym'
 export type Verdict = 'Accepted' | 'WrongAnswer' | 'CompileError' | 'RuntimeError' | 'TimeLimitExceeded' | 'JudgeError'
 
 export interface ProblemSummary {
@@ -6,6 +10,7 @@ export interface ProblemSummary {
   slug: string
   title: string
   difficulty: Difficulty
+  category: Category
   testCaseCount: number
   solved: boolean
 }
@@ -18,17 +23,29 @@ export interface TestCase {
   order: number
 }
 
+export interface ProblemTranslation {
+  title: string
+  description: string
+}
+
+export interface ProblemTranslations {
+  es?: ProblemTranslation
+}
+
 export interface Problem {
   id: number
   slug: string
   title: string
   description: string
   difficulty: Difficulty
+  category: Category
   starterCode: string
   className: string
   methodName: string
   timeLimitMs: number
   testCases: TestCase[]
+  /** Only present on the admin `/full` endpoint. */
+  translations?: ProblemTranslations
 }
 
 export interface TestCaseInput {
@@ -42,11 +59,13 @@ export interface ProblemInput {
   slug?: string
   description: string
   difficulty: Difficulty
+  category: Category
   starterCode: string
   methodName: string
   className?: string
   timeLimitMs?: number
   testCases: TestCaseInput[]
+  translations?: ProblemTranslations
 }
 
 export interface CompileDiagnostic {
@@ -101,6 +120,18 @@ export interface CompletionResponse {
   items: CompletionItem[]
 }
 
+export type SandboxStatus = 'Ok' | 'CompileError' | 'RuntimeError' | 'TimeLimitExceeded'
+
+export interface SandboxResult {
+  status: SandboxStatus
+  diagnostics: CompileDiagnostic[]
+  stdout: string
+  stderr: string
+  exitCode: number | null
+  timedOut: boolean
+  durationMs: number
+}
+
 export class ApiError extends Error {
   status: number
   constructor(status: number, message: string) {
@@ -109,12 +140,18 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`/api${path}`, {
-    ...init,
-    headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) },
-  })
+interface RequestOptions extends RequestInit {
+  /** Attach the admin token; a 401 clears the stored token. */
+  admin?: boolean
+}
+
+async function request<T>(path: string, init?: RequestOptions): Promise<T> {
+  const headers: Record<string, string> = { 'content-type': 'application/json' }
+  if (init?.admin && adminToken.value) headers['X-Admin-Token'] = adminToken.value
+  const { admin, ...rest } = init ?? {}
+  const res = await fetch(`/api${path}`, { ...rest, headers: { ...headers, ...(rest.headers as Record<string, string> | undefined) } })
   if (!res.ok) {
+    if (admin && res.status === 401) clearAdminToken()
     let message = `${res.status} ${res.statusText}`
     try {
       const body = await res.json()
@@ -129,28 +166,38 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T
 }
 
+const lang = () => `lang=${encodeURIComponent(locale.value)}`
+
 export const api = {
-  listProblems: () => request<ProblemSummary[]>('/problems'),
-  getProblem: (idOrSlug: string | number) => request<Problem>(`/problems/${idOrSlug}`),
-  getProblemFull: (idOrSlug: string | number) => request<Problem>(`/problems/${idOrSlug}/full`),
-  createProblem: (input: ProblemInput) => request<Problem>('/problems', { method: 'POST', body: JSON.stringify(input) }),
+  // Localized reads
+  listProblems: () => request<ProblemSummary[]>(`/problems?${lang()}`),
+  getProblem: (idOrSlug: string | number) => request<Problem>(`/problems/${idOrSlug}?${lang()}`),
+
+  // Admin
+  checkAdmin: (token: string) =>
+    request<{ ok: boolean }>('/admin/check', { headers: { 'X-Admin-Token': token } }),
+  getProblemFull: (idOrSlug: string | number) => request<Problem>(`/problems/${idOrSlug}/full`, { admin: true }),
+  createProblem: (input: ProblemInput) =>
+    request<Problem>('/problems', { method: 'POST', body: JSON.stringify(input), admin: true }),
   updateProblem: (id: number, input: ProblemInput) =>
-    request<Problem>(`/problems/${id}`, { method: 'PUT', body: JSON.stringify(input) }),
-  deleteProblem: (id: number) => request<void>(`/problems/${id}`, { method: 'DELETE' }),
+    request<Problem>(`/problems/${id}`, { method: 'PUT', body: JSON.stringify(input), admin: true }),
+  deleteProblem: (id: number) => request<void>(`/problems/${id}`, { method: 'DELETE', admin: true }),
+
+  // Judge
   run: (id: number, code: string) => request<JudgeResult>(`/problems/${id}/run`, { method: 'POST', body: JSON.stringify({ code }) }),
   submit: (id: number, code: string) =>
     request<Submission>(`/problems/${id}/submit`, { method: 'POST', body: JSON.stringify({ code }) }),
   listSubmissions: (id: number) => request<Submission[]>(`/problems/${id}/submissions`),
   getSubmission: (id: number) => request<Submission>(`/submissions/${id}`),
+
+  // Editor support
   complete: (code: string, position: number, signal?: AbortSignal) =>
     request<CompletionResponse>('/complete', { method: 'POST', body: JSON.stringify({ code, position }), signal }),
+
+  // Sandbox
+  sandboxRun: (code: string, stdin: string) =>
+    request<SandboxResult>('/sandbox/run', { method: 'POST', body: JSON.stringify({ code, stdin }) }),
 }
 
-export const verdictLabel: Record<Verdict, string> = {
-  Accepted: 'Accepted',
-  WrongAnswer: 'Wrong Answer',
-  CompileError: 'Compile Error',
-  RuntimeError: 'Runtime Error',
-  TimeLimitExceeded: 'Time Limit Exceeded',
-  JudgeError: 'Judge Error',
-}
+/** i18n key for a verdict, e.g. `verdict.Accepted`. */
+export const verdictKey = (v: Verdict) => `verdict.${v}`

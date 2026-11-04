@@ -7,6 +7,7 @@ export const es: MessageSchema = {
   },
   nav: {
     problems: 'Problemas',
+    docs: 'Documentación',
     sandbox: 'Sandbox',
     newProblem: 'Nuevo problema',
     admin: 'Admin',
@@ -21,6 +22,16 @@ export const es: MessageSchema = {
   category: {
     School: 'Escuela',
     Gym: 'Gimnasio',
+  },
+  progress: {
+    compiling: 'Compilando…',
+    running: 'Ejecutando casos de prueba',
+    waitingHint: 'Tu solución se está compilando y evaluando.',
+    accepted: '¡Aceptado!',
+    allPassed: 'Los {total} casos de prueba han pasado.',
+    failedAt: 'Ha fallado en el caso {n} de {total}.',
+    close: 'Cerrar',
+    details: 'Ver detalles',
   },
   verdict: {
     Accepted: 'Aceptado',
@@ -73,6 +84,7 @@ export const es: MessageSchema = {
     hint: 'Pulsa {run} para comprobar los casos de ejemplo, o {submit} para evaluar todos los casos de prueba.',
     compiling: 'Compilando y ejecutando…',
     confirmReset: '¿Sustituir tu código por el código inicial?',
+    usefulDocs: 'Documentación útil',
   },
   results: {
     sampleCases: 'casos de ejemplo',
@@ -124,6 +136,8 @@ export const es: MessageSchema = {
     inputInvalid: '— debe ser un array JSON',
     expected: 'Esperado (JSON)',
     expectedInvalid: '— JSON no válido',
+    docLinks: 'Enlaces a la documentación',
+    docLinksHint: 'Temas que se muestran en la página del problema como lectura útil.',
   },
   admin: {
     title: 'Admin',
@@ -160,6 +174,19 @@ export const es: MessageSchema = {
     timedOut: 'tiempo agotado',
     reset: 'Reiniciar',
     confirmReset: '¿Sustituir tu programa por el ejemplo?',
+    loadedExample: 'Ejemplo «{title}» cargado desde {topic}.',
+    dismiss: 'Cerrar',
+  },
+  docs: {
+    title: 'Documentación de C#',
+    intro: 'Los fundamentos de C#, cada uno con una breve explicación y ejemplos ejecutables que puedes abrir en el Sandbox.',
+    exampleCount: '{n} ejemplo | {n} ejemplos',
+    examples: 'Ejemplos',
+    openInSandbox: 'Abrir en el sandbox',
+    stdin: 'Entrada estándar',
+    emptyStdin: '(vacía)',
+    backToDocs: 'Volver a la documentación',
+    notFound: 'Ese tema de la documentación no existe.',
   },
   errors: {
     generic: 'Algo salió mal: {error}',

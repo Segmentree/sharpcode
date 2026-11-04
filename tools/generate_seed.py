@@ -32,12 +32,32 @@ def cases(visible, hidden_gen, fn):
 problems = []
 
 
+# Documentation topics (client/src/docs/topics.ts slugs) shown on each problem page.
+DOCS = {
+    "divisible-by-5": ["variables-and-types", "operators", "if-else"],
+    "age-discount": ["if-else", "operators"],
+    "speed-classification": ["variables-and-types", "if-else", "strings"],
+    "largest-of-three": ["if-else", "operators", "math"],
+    "basic-calculator": ["variables-and-types", "switch", "nullable-types", "if-else"],
+    "leap-year": ["operators", "if-else"],
+    "cinema-ticket": ["if-else", "operators", "math"],
+    "login-check": ["strings", "operators", "variables-and-types"],
+    "grade-classification": ["if-else", "operators", "strings"],
+    "shipping-costs": ["if-else", "operators"],
+    "two-sum": ["arrays", "loops", "dictionaries"],
+    "reverse-string": ["strings", "arrays", "loops"],
+    "fizz-buzz": ["loops", "lists", "operators", "strings"],
+    "longest-substring-without-repeating": ["strings", "dictionaries", "loops", "math"],
+}
+
+
 def add(slug, category, difficulty, method, params_sig, ret, title_en, desc_en, title_es, desc_es, tests, starter_body="throw new NotImplementedException();", usings=""):
     starter = f"{usings}public class Solution\n{{\n    public {ret} {method}({params_sig})\n    {{\n        {starter_body}\n    }}\n}}\n"
     problems.append({
         "slug": slug, "category": category, "difficulty": difficulty, "methodName": method, "className": "Solution",
         "timeLimitMs": 2000, "title": title_en, "description": desc_en.strip() + "\n", "starterCode": starter,
         "translations": {"es": {"title": title_es, "description": desc_es.strip() + "\n"}},
+        "docLinks": DOCS[slug],
         "testCases": tests,
     })
 

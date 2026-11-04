@@ -27,6 +27,8 @@ export const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', name: 'problems', component: () => import('./views/ProblemListView.vue') },
+    { path: '/docs', name: 'docs', component: () => import('./views/DocsIndexView.vue') },
+    { path: '/docs/:slug', name: 'doc-topic', component: () => import('./views/DocTopicView.vue'), props: true },
     { path: '/sandbox', name: 'sandbox', component: () => import('./views/SandboxView.vue') },
     ...adminRoutes,
     { path: '/problems/:slug', name: 'problem', component: () => import('./views/ProblemView.vue'), props: true },

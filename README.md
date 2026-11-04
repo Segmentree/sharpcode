@@ -42,13 +42,22 @@ computes every expected output from a reference implementation, so edit the scri
 rerun it instead of editing the JSON. On startup the API inserts any seeded problem whose
 slug is missing from the database; existing problems are never overwritten.
 
+## Documentation
+
+`client/src/docs/topics.ts` holds the C# basics (14 topics, English and Spanish) with runnable
+examples; every example is a complete console program that the **Open in sandbox** button loads
+into the Sandbox. Problems point to topics through `docLinks` (set in `tools/generate_seed.py`),
+shown as "Useful documentation" on the problem page. Seeded problems are re-synced from
+`seed.json` on every start, so the seed file is the source of truth for them.
+
 ## Admin
 
 Creating, editing and deleting problems requires a shared secret. Set it as
 `Admin:Token` (`Admin__Token` as an environment variable, `fly secrets set Admin__Token=…`
 on Fly). The client's **Admin** page stores the token in the browser and sends it as the
 `X-Admin-Token` header. In development `appsettings.Development.json` sets it to
-`dev-admin-token`.
+`dev-admin-token`. The admin page and the problem editor are only compiled into development
+builds; production has no way to add problems.
 
 ## Sandbox
 

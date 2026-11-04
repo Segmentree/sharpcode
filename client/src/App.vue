@@ -17,6 +17,7 @@ function choose(l: Locale) {
       <RouterLink to="/" class="brand"><span class="logo">#</span> {{ t('app.name') }}</RouterLink>
       <nav>
         <RouterLink to="/">{{ t('nav.problems') }}</RouterLink>
+        <RouterLink to="/docs">{{ t('nav.docs') }}</RouterLink>
         <RouterLink to="/sandbox">{{ t('nav.sandbox') }}</RouterLink>
         <RouterLink v-if="isAdmin" to="/problems/new">{{ t('nav.newProblem') }}</RouterLink>
       </nav>

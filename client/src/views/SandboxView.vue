@@ -1,10 +1,15 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
 import { api, type SandboxResult } from '../api'
 import CodeEditor from '../components/CodeEditor.vue'
+import { findExample, pick } from '../docs/useDocs'
+import type { DocExample, DocTopic } from '../docs/types'
 
 const { t } = useI18n()
+const route = useRoute()
+const router = useRouter()
 
 const CODE_KEY = 'sharpcode:sandbox:code'
 const STDIN_KEY = 'sharpcode:sandbox:stdin'
@@ -44,6 +49,28 @@ const result = ref<SandboxResult | null>(null)
 
 watch(code, (v) => store(CODE_KEY, v))
 watch(stdin, (v) => store(STDIN_KEY, v))
+
+/** Example loaded from the docs via `?example=topic/id`; shown in a dismissible banner. */
+const loaded = ref<{ topic: DocTopic; example: DocExample } | null>(null)
+
+function loadExampleFromQuery() {
+  const raw = route.query.example
+  const ref_ = Array.isArray(raw) ? raw[0] : raw
+  const found = findExample(typeof ref_ === 'string' ? ref_ : undefined)
+  if (!found) return
+  code.value = found.example.code
+  stdin.value = found.example.stdin ?? ''
+  result.value = null
+  error.value = null
+  loaded.value = found
+  // Drop the query so a reload keeps the user's edits (the drafts are persisted in localStorage).
+  const { example: _example, ...rest } = route.query
+  void _example
+  router.replace({ path: route.path, query: rest })
+}
+
+onMounted(loadExampleFromQuery)
+watch(() => route.query.example, loadExampleFromQuery)
 
 async function run() {
   busy.value = true
@@ -113,6 +140,14 @@ const statusClass: Record<SandboxResult['status'], string> = {
         </template>
       </div>
       <div class="output-body">
+        <div v-if="loaded" class="banner">
+          <i18n-t keypath="sandbox.loadedExample" tag="span">
+            <template #title>{{ pick(loaded.example.title) }}</template>
+            <template #topic><RouterLink :to="`/docs/${loaded.topic.slug}`">{{ pick(loaded.topic.title) }}</RouterLink></template>
+          </i18n-t>
+          <span class="spacer"></span>
+          <button type="button" class="sm" @click="loaded = null">{{ t('sandbox.dismiss') }}</button>
+        </div>
         <p class="muted small intro">{{ t('sandbox.intro') }}</p>
         <p v-if="error" class="error">{{ error }}</p>
 
@@ -162,6 +197,7 @@ const statusClass: Record<SandboxResult['status'], string> = {
 .stdin-body textarea { font-family: var(--mono); }
 .hint { margin: 0; }
 .intro { margin: 0 0 0.75rem; }
+.banner { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; padding: 0.5rem 0.75rem; border-radius: 8px; border: 1px solid rgba(124, 156, 255, 0.4); background: rgba(124, 156, 255, 0.1); font-size: 0.9rem; }
 .output-body { flex: 1; min-height: 0; overflow: auto; padding: 0.75rem; display: flex; flex-direction: column; gap: 0.6rem; }
 .small { font-size: 0.82rem; }
 .meta { white-space: nowrap; }

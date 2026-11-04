@@ -10,7 +10,7 @@ import { csharp } from '@codemirror/legacy-modes/mode/clike'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { csharpCompletion } from '../csharpCompletion'
 
-const props = defineProps<{ modelValue: string; readonly?: boolean }>()
+const props = defineProps<{ modelValue: string; readonly?: boolean; autoHeight?: boolean }>()
 const emit = defineEmits<{ (e: 'update:modelValue', value: string): void }>()
 
 const host = ref<HTMLDivElement | null>(null)
@@ -71,11 +71,13 @@ onBeforeUnmount(() => view?.destroy())
 </script>
 
 <template>
-  <div ref="host" class="editor-host"></div>
+  <div ref="host" class="editor-host" :class="{ 'auto-height': autoHeight }"></div>
 </template>
 
 <style scoped>
 .editor-host { height: 100%; min-height: 200px; overflow: hidden; border-radius: 8px; }
 .editor-host :deep(.cm-editor) { height: 100%; }
+.editor-host.auto-height { height: auto; min-height: 0; }
+.editor-host.auto-height :deep(.cm-editor) { height: auto; }
 .editor-host :deep(.cm-tooltip-autocomplete) { font-family: var(--mono); font-size: 13px; }
 </style>

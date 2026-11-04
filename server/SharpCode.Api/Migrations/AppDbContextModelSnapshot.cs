@@ -42,6 +42,10 @@ namespace SharpCode.Api.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("DocLinksJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("MethodName")
                         .IsRequired()
                         .HasColumnType("TEXT");

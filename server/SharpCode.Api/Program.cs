@@ -202,6 +202,8 @@ static void ApplyInput(Problem problem, ProblemInput input)
     problem.MethodName = input.MethodName.Trim();
     problem.ClassName = string.IsNullOrWhiteSpace(input.ClassName) ? "Solution" : input.ClassName.Trim();
     problem.TimeLimitMs = input.TimeLimitMs ?? problem.TimeLimitMs;
+    if (input.DocLinks is not null)
+        problem.DocLinksJson = JsonSerializer.Serialize(input.DocLinks.Select(d => d.Trim()).Where(d => d.Length > 0).Distinct().ToList());
     if (input.TestCases is not null)
         problem.TestCases = input.TestCases.Select((t, i) => new TestCase
             { Input = t.Input, Expected = t.Expected, IsHidden = t.IsHidden, Order = i }).ToList();

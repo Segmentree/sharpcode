@@ -5,10 +5,12 @@ import { useRouter } from 'vue-router'
 import { api, type Category, type Difficulty, type ProblemInput, type TestCaseInput } from '../api'
 import CodeEditor from '../components/CodeEditor.vue'
 import MarkdownView from '../components/MarkdownView.vue'
+import { useDocs } from '../docs/useDocs'
 
 const props = defineProps<{ id?: string }>()
 const router = useRouter()
 const { t } = useI18n()
+const { localizedTopics } = useDocs()
 
 const VISIBLE_REQUIRED = 5
 const HIDDEN_REQUIRED = 20
@@ -41,6 +43,7 @@ const form = reactive<ProblemInput>({
   className: 'Solution',
   timeLimitMs: 2000,
   testCases: defaultCases(),
+  docLinks: [],
 })
 const translation = reactive({ title: '', description: '' })
 
@@ -89,6 +92,7 @@ async function save() {
     const payload: ProblemInput = {
       ...form,
       slug: form.slug?.trim() || undefined,
+      docLinks: form.docLinks && form.docLinks.length ? form.docLinks : undefined,
       translations: hasTranslation ? { es: { title: translation.title, description: translation.description } } : undefined,
     }
     const saved = isEdit.value ? await api.updateProblem(Number(props.id), payload) : await api.createProblem(payload)
@@ -115,6 +119,7 @@ onMounted(async () => {
       className: p.className,
       timeLimitMs: p.timeLimitMs,
       testCases: p.testCases.map((tc) => ({ input: tc.input, expected: tc.expected, isHidden: tc.isHidden })),
+      docLinks: [...(p.docLinks ?? [])],
     })
     translation.title = p.translations?.es?.title ?? ''
     translation.description = p.translations?.es?.description ?? ''
@@ -200,6 +205,17 @@ onMounted(async () => {
       </section>
 
       <section class="panel block">
+        <h3>{{ t('editor.docLinks') }}</h3>
+        <p class="muted small">{{ t('editor.docLinksHint') }}</p>
+        <div class="doc-grid">
+          <label v-for="item in localizedTopics" :key="item.topic.slug" class="inline">
+            <input type="checkbox" v-model="form.docLinks" :value="item.topic.slug" />
+            {{ item.title }} <span class="muted small">({{ item.topic.slug }})</span>
+          </label>
+        </div>
+      </section>
+
+      <section class="panel block">
         <div class="row">
           <h3>{{ t('editor.testCases') }}</h3>
           <span class="spacer"></span>
@@ -254,6 +270,7 @@ onMounted(async () => {
 .grid-4 { display: grid; grid-template-columns: 2fr 1.5fr 1fr 1fr; gap: 0.75rem; }
 .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.doc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0.35rem 0.75rem; }
 .small { font-size: 0.82rem; }
 .editor { height: 260px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .preview { padding: 0.75rem 1rem; min-height: 8rem; }

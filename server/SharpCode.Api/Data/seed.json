@@ -15,6 +15,11 @@
         "description": "Dado un número entero `number`, utiliza el operador `%` para determinar si es divisible entre 5.\n\nDevuelve `true` si es divisible y `false` en caso contrario.\n\n**Ejemplo**\n\n```\nEntrada: number = 15\nSalida:  true\n```\n"
       }
     },
+    "docLinks": [
+      "variables-and-types",
+      "operators",
+      "if-else"
+    ],
     "testCases": [
       {
         "input": "[15]",
@@ -159,6 +164,10 @@
         "description": "Dada la `age` (edad) de una persona, devuelve el porcentaje de descuento que le corresponde:\n\n- Menos de 12 años: **50%** de descuento.\n- Entre 12 y 65 años (ambos incluidos): **sin** descuento.\n- Más de 65 años: **30%** de descuento.\n\nDevuelve el porcentaje como un entero (`50`, `0` o `30`).\n\n**Ejemplo**\n\n```\nEntrada: age = 70\nSalida:  30\n```\n"
       }
     },
+    "docLinks": [
+      "if-else",
+      "operators"
+    ],
     "testCases": [
       {
         "input": "[8]",
@@ -303,6 +312,11 @@
         "description": "Dada la velocidad de un vehículo `speedKmh` en km/h, devuelve exactamente una de estas cadenas:\n\n- Inferior a 50: `\"Velocidad baja\"`\n- Entre 50 y 100 (ambos incluidos): `\"Velocidad adecuada\"`\n- Superior a 100: `\"Velocidad alta\"`\n\n**Ejemplo**\n\n```\nEntrada: speedKmh = 72.5\nSalida:  \"Velocidad adecuada\"\n```\n"
       }
     },
+    "docLinks": [
+      "variables-and-types",
+      "if-else",
+      "strings"
+    ],
     "testCases": [
       {
         "input": "[72.5]",
@@ -447,6 +461,11 @@
         "description": "Dados tres enteros `a`, `b` y `c`, utiliza estructuras `if` para determinar cuál es el mayor y devuélvelo.\n\nTen en cuenta que algunos o todos los números pueden ser iguales; en ese caso devuelve ese valor.\n\n**Ejemplo**\n\n```\nEntrada: a = 4, b = 9, c = 2\nSalida:  9\n```\n"
       }
     },
+    "docLinks": [
+      "if-else",
+      "operators",
+      "math"
+    ],
     "testCases": [
       {
         "input": "[4, 9, 2]",
@@ -591,6 +610,12 @@
         "description": "Dados dos números `a` y `b` y un carácter `op` que es uno de `+`, `-`, `*` o `/`, realiza la operación correspondiente y devuelve el resultado.\n\nSi se intenta dividir entre cero, o `op` no es uno de los cuatro operadores, devuelve `null` (es el caso del \"mensaje de error\").\n\n**Ejemplo**\n\n```\nEntrada: a = 6, b = 3, op = '/'\nSalida:  2\n```\n"
       }
     },
+    "docLinks": [
+      "variables-and-types",
+      "switch",
+      "nullable-types",
+      "if-else"
+    ],
     "testCases": [
       {
         "input": "[6, 3, \"/\"]",
@@ -735,6 +760,10 @@
         "description": "Dado un `year` (año), devuelve `true` si es bisiesto y `false` en caso contrario.\n\nUn año es bisiesto si es divisible entre 400, o si es divisible entre 4 pero no entre 100.\n\n**Ejemplo**\n\n```\nEntrada: year = 2000\nSalida:  true\n```\n"
       }
     },
+    "docLinks": [
+      "operators",
+      "if-else"
+    ],
     "testCases": [
       {
         "input": "[2000]",
@@ -879,6 +908,11 @@
         "description": "Dada la `age` (edad) de una persona y el `price` (precio) base de la entrada (por ejemplo 10 €), devuelve el precio final:\n\n- Menores de 5 años: entrada gratuita (`0`).\n- Entre 5 y 17 años: **50%** de descuento.\n- Entre 18 y 64 años: precio completo.\n- 65 años o más: **30%** de descuento.\n\n**Ejemplo**\n\n```\nEntrada: age = 10, price = 10\nSalida:  5\n```\n"
       }
     },
+    "docLinks": [
+      "if-else",
+      "operators",
+      "math"
+    ],
     "testCases": [
       {
         "input": "[10, 10]",
@@ -1023,6 +1057,11 @@
         "description": "Dado el nombre de usuario almacenado `storedUser`, el nombre introducido por el usuario `enteredUser` y una variable `accountActive` (cuenta activa), devuelve si el acceso está permitido.\n\nEl acceso **solamente** está permitido si ambos nombres coinciden exactamente (distingue mayúsculas) y la cuenta está activa.\n\n**Ejemplo**\n\n```\nEntrada: storedUser = \"ana\", enteredUser = \"ana\", accountActive = true\nSalida:  true\n```\n"
       }
     },
+    "docLinks": [
+      "strings",
+      "operators",
+      "variables-and-types"
+    ],
     "testCases": [
       {
         "input": "[\"ana\", \"ana\", true]",
@@ -1167,6 +1206,11 @@
         "description": "Dada una `grade` (nota) comprendida entre 0 y 10, devuelve la calificación correspondiente, exactamente así:\n\n- De 0 a 4,9: `\"Insuficiente\"`\n- De 5 a 5,9: `\"Suficiente\"`\n- De 6 a 6,9: `\"Bien\"`\n- De 7 a 8,9: `\"Notable\"`\n- De 9 a 10: `\"Sobresaliente\"`\n\nSi la nota no está entre 0 y 10, devuelve `\"Nota no válida\"`.\n\n**Ejemplo**\n\n```\nEntrada: grade = 8.9\nSalida:  \"Notable\"\n```\n"
       }
     },
+    "docLinks": [
+      "if-else",
+      "operators",
+      "strings"
+    ],
     "testCases": [
       {
         "input": "[8.9]",
@@ -1311,6 +1355,10 @@
         "description": "Dada la `quantity` (cantidad) de productos comprados y el `amount` (importe) total de la compra en euros, calcula el importe final que debe pagar el cliente, incluyendo los gastos de envío:\n\n- Si la compra supera los 100 €, los gastos de envío son gratuitos.\n- Si la compra es de 50 € a 100 € (ambos incluidos), los gastos de envío son de 5 €.\n- Si la compra es inferior a 50 €, los gastos de envío son de 10 €.\n\n**Ejemplo**\n\n```\nEntrada: quantity = 3, amount = 75\nSalida:  80\n```\n"
       }
     },
+    "docLinks": [
+      "if-else",
+      "operators"
+    ],
     "testCases": [
       {
         "input": "[3, 75]",
@@ -1455,6 +1503,11 @@
         "description": "Dado un array de enteros `nums` y un entero `target`, devuelve los **índices** de los dos números cuya suma es igual a `target`.\n\nPuedes asumir que cada entrada tiene exactamente una solución y que no puedes usar el mismo elemento dos veces. Devuelve primero el índice menor.\n\n**Ejemplo**\n\n```\nEntrada: nums = [2, 7, 11, 15], target = 9\nSalida:  [0, 1]\n```\n"
       }
     },
+    "docLinks": [
+      "arrays",
+      "loops",
+      "dictionaries"
+    ],
     "testCases": [
       {
         "input": "[[2, 7, 11, 15], 9]",
@@ -1599,6 +1652,11 @@
         "description": "Escribe una función que invierta una cadena de texto.\n\n**Ejemplo**\n\n```\nEntrada: \"hello\"\nSalida:  \"olleh\"\n```\n"
       }
     },
+    "docLinks": [
+      "strings",
+      "arrays",
+      "loops"
+    ],
     "testCases": [
       {
         "input": "[\"hello\"]",
@@ -1743,6 +1801,12 @@
         "description": "Dado un entero `n`, devuelve una lista de cadenas donde para cada `i` de 1 a `n`:\n\n- `\"FizzBuzz\"` si `i` es divisible entre 3 y 5\n- `\"Fizz\"` si `i` es divisible entre 3\n- `\"Buzz\"` si `i` es divisible entre 5\n- `i` como cadena en cualquier otro caso\n"
       }
     },
+    "docLinks": [
+      "loops",
+      "lists",
+      "operators",
+      "strings"
+    ],
     "testCases": [
       {
         "input": "[5]",
@@ -1887,6 +1951,12 @@
         "description": "Dada una cadena `s`, encuentra la longitud de la **subcadena más larga** sin caracteres repetidos.\n\n**Ejemplo**\n\n```\nEntrada: \"abcabcbb\"\nSalida:  3   // \"abc\"\n```\n"
       }
     },
+    "docLinks": [
+      "strings",
+      "dictionaries",
+      "loops",
+      "math"
+    ],
     "testCases": [
       {
         "input": "[\"abcabcbb\"]",

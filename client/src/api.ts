@@ -44,6 +44,8 @@ export interface Problem {
   methodName: string
   timeLimitMs: number
   testCases: TestCase[]
+  /** Documentation topic slugs useful for this problem (unknown slugs are ignored by the UI). */
+  docLinks: string[]
   /** Only present on the admin `/full` endpoint. */
   translations?: ProblemTranslations
 }
@@ -66,6 +68,7 @@ export interface ProblemInput {
   timeLimitMs?: number
   testCases: TestCaseInput[]
   translations?: ProblemTranslations
+  docLinks?: string[]
 }
 
 export interface CompileDiagnostic {

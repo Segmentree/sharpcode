@@ -21,6 +21,8 @@ public sealed class Problem
     public required string MethodName { get; set; }
     /// <summary>Per test case wall-clock limit enforced by the judge.</summary>
     public int TimeLimitMs { get; set; } = 2000;
+    /// <summary>Documentation topic slugs (client-side content) useful for this problem, stored as a JSON array.</summary>
+    public string DocLinksJson { get; set; } = "[]";
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public List<TestCase> TestCases { get; set; } = [];
     /// <summary>Title/description in other languages. Title and Description on the problem itself are English.</summary>

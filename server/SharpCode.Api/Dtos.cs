@@ -13,7 +13,7 @@ public sealed record TranslationDto(string Title, string Description);
 
 public sealed record ProblemDto(int Id, string Slug, string Title, string Description, Difficulty Difficulty,
     ProblemCategory Category, string StarterCode, string ClassName, string MethodName, int TimeLimitMs,
-    IReadOnlyList<TestCaseDto> TestCases, Dictionary<string, TranslationDto>? Translations);
+    IReadOnlyList<string> DocLinks, IReadOnlyList<TestCaseDto> TestCases, Dictionary<string, TranslationDto>? Translations);
 
 public sealed record TestCaseInput(
     [property: Required] string Input,
@@ -31,7 +31,8 @@ public sealed record ProblemInput(
     string? ClassName,
     int? TimeLimitMs,
     List<TestCaseInput>? TestCases,
-    Dictionary<string, TranslationDto>? Translations);
+    Dictionary<string, TranslationDto>? Translations,
+    List<string>? DocLinks);
 
 public sealed record CodeInput([property: Required] string Code);
 
@@ -56,11 +57,17 @@ public static class Mapping
     {
         var tr = Localize(p, lang);
         return new ProblemDto(p.Id, p.Slug, tr.Title, tr.Description, p.Difficulty, p.Category, p.StarterCode,
-            p.ClassName, p.MethodName, p.TimeLimitMs,
+            p.ClassName, p.MethodName, p.TimeLimitMs, DocLinks(p),
             p.TestCases.OrderBy(t => t.Order).ThenBy(t => t.Id).Select(t => t.ToDto(includeHiddenDetails)).ToList(),
             includeTranslations
                 ? p.Translations.ToDictionary(t => t.Locale, t => new TranslationDto(t.Title, t.Description))
                 : null);
+    }
+
+    public static IReadOnlyList<string> DocLinks(Problem p)
+    {
+        try { return System.Text.Json.JsonSerializer.Deserialize<List<string>>(p.DocLinksJson) ?? []; }
+        catch (System.Text.Json.JsonException) { return []; }
     }
 
     public static (string Title, string Description) Localize(Problem p, string? lang)

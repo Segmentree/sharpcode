@@ -6,7 +6,9 @@ import { locale } from '../locale'
 import CodeEditor from '../components/CodeEditor.vue'
 import MarkdownView from '../components/MarkdownView.vue'
 import ResultsPanel from '../components/ResultsPanel.vue'
+import SubmitProgress from '../components/SubmitProgress.vue'
 import DifficultyBadge from '../components/DifficultyBadge.vue'
+import { findTopic, pick } from '../docs/useDocs'
 
 const props = defineProps<{ slug: string }>()
 const { t } = useI18n()
@@ -20,11 +22,15 @@ const result = ref<JudgeResult | null>(null)
 const resultMode = ref<'run' | 'submit'>('run')
 const submissions = ref<Submission[]>([])
 const tab = ref<'description' | 'submissions'>('description')
+/** The animated progress overlay shown while a submission is judged and its verdict is revealed. */
+const progressOpen = ref(false)
 
-const draftKey = computed(() => (problem.value ? `sharpcode:draft:${problem.value.id}` : ''))
 const sampleCases = computed(() => problem.value?.testCases.filter((t) => !t.isHidden) ?? [])
 const hiddenCount = computed(() => problem.value?.testCases.filter((t) => t.isHidden).length ?? 0)
 const usings = 'System, System.Collections.Generic, System.Linq, System.Text'
+const docTopics = computed(() =>
+  (problem.value?.docLinks ?? []).map((slug) => findTopic(slug)).filter((x): x is NonNullable<typeof x> => !!x),
+)
 
 async function load() {
   loading.value = true
@@ -32,14 +38,9 @@ async function load() {
   result.value = null
   try {
     problem.value = await api.getProblem(props.slug)
-    let draft: string | null = null
-    try {
-      draft = localStorage.getItem(draftKey.value)
-    } catch {
-      /* storage unavailable */
-    }
-    code.value = draft ?? problem.value.starterCode
     submissions.value = await api.listSubmissions(problem.value.id)
+    // The editor always opens on this problem's latest submission, or on the starter code when there is none.
+    code.value = submissions.value[0]?.code ?? problem.value.starterCode
   } catch (e) {
     error.value = (e as Error).message
   } finally {
@@ -57,15 +58,6 @@ async function reloadText() {
     error.value = (e as Error).message
   }
 }
-
-watch(code, (value) => {
-  if (!draftKey.value) return
-  try {
-    localStorage.setItem(draftKey.value, value)
-  } catch {
-    /* ignore */
-  }
-})
 
 async function run() {
   if (!problem.value) return
@@ -85,13 +77,17 @@ async function submit() {
   if (!problem.value) return
   busy.value = 'submit'
   error.value = null
+  result.value = null
+  progressOpen.value = true
   try {
     const s = await api.submit(problem.value.id, code.value)
     result.value = s.result ?? null
     resultMode.value = 'submit'
     submissions.value = [s, ...submissions.value]
+    if (!s.result) progressOpen.value = false
   } catch (e) {
     error.value = (e as Error).message
+    progressOpen.value = false
   } finally {
     busy.value = null
   }
@@ -124,6 +120,12 @@ watch(locale, reloadText)
 </script>
 
 <template>
+  <SubmitProgress
+    v-if="progressOpen && problem"
+    :result="result"
+    :total="problem.testCases.length"
+    @close="progressOpen = false"
+  />
   <div v-if="loading" class="centered muted">{{ t('app.loading') }}</div>
   <div v-else-if="!problem" class="centered error">{{ error ?? t('problem.notFound') }}</div>
 
@@ -153,6 +155,16 @@ watch(locale, reloadText)
           </div>
         </div>
         <p v-if="hiddenCount" class="muted small">{{ t('problem.hiddenNote', { n: hiddenCount }, hiddenCount) }}</p>
+
+        <template v-if="docTopics.length">
+          <h3 class="section-title">{{ t('problem.usefulDocs') }}</h3>
+          <ul class="doc-links">
+            <li v-for="d in docTopics" :key="d.slug">
+              <RouterLink :to="`/docs/${d.slug}`">{{ pick(d.title) }}</RouterLink>
+              <span class="muted small"> — {{ pick(d.summary) }}</span>
+            </li>
+          </ul>
+        </template>
 
         <h3 class="section-title">{{ t('problem.contract') }}</h3>
         <i18n-t keypath="problem.contractText" tag="p" class="muted small">
@@ -234,6 +246,7 @@ watch(locale, reloadText)
 .title h2 { margin: 0; }
 .badge.cat { color: var(--accent); background: rgba(124, 156, 255, 0.12); }
 .section-title { margin-top: 1.5rem; font-size: 0.95rem; }
+.doc-links { margin: 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 0.3rem; }
 .small { font-size: 0.82rem; }
 .sample { margin-bottom: 0.75rem; }
 .sample-grid { display: grid; grid-template-columns: auto 1fr; gap: 0.25rem 0.75rem; align-items: start; }

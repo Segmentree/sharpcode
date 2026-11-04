@@ -5,6 +5,7 @@ export const en = {
   },
   nav: {
     problems: 'Problems',
+    docs: 'Docs',
     sandbox: 'Sandbox',
     newProblem: 'New problem',
     admin: 'Admin',
@@ -19,6 +20,16 @@ export const en = {
   category: {
     School: 'School',
     Gym: 'Gym',
+  },
+  progress: {
+    compiling: 'Compiling…',
+    running: 'Running test cases',
+    waitingHint: 'Your solution is being compiled and judged.',
+    accepted: 'Accepted!',
+    allPassed: 'All {total} test cases passed.',
+    failedAt: 'Failed on test case {n} of {total}.',
+    close: 'Close',
+    details: 'See details',
   },
   verdict: {
     Accepted: 'Accepted',
@@ -71,6 +82,7 @@ export const en = {
     hint: 'Press {run} to check the sample cases, or {submit} to judge against every test case.',
     compiling: 'Compiling and running…',
     confirmReset: 'Replace your code with the starter code?',
+    usefulDocs: 'Useful documentation',
   },
   results: {
     sampleCases: 'sample cases',
@@ -122,6 +134,8 @@ export const en = {
     inputInvalid: '— must be a JSON array',
     expected: 'Expected (JSON)',
     expectedInvalid: '— invalid JSON',
+    docLinks: 'Documentation links',
+    docLinksHint: 'Topics shown on the problem page as useful reading.',
   },
   admin: {
     title: 'Admin',
@@ -158,6 +172,19 @@ export const en = {
     timedOut: 'timed out',
     reset: 'Reset',
     confirmReset: 'Replace your program with the example?',
+    loadedExample: 'Loaded example «{title}» from {topic}.',
+    dismiss: 'Dismiss',
+  },
+  docs: {
+    title: 'C# documentation',
+    intro: 'The basics of C#, each with a brief explanation and runnable examples you can open in the Sandbox.',
+    exampleCount: '{n} example | {n} examples',
+    examples: 'Examples',
+    openInSandbox: 'Open in sandbox',
+    stdin: 'Standard input',
+    emptyStdin: '(empty)',
+    backToDocs: 'Back to docs',
+    notFound: 'That documentation topic does not exist.',
   },
   errors: {
     generic: 'Something went wrong: {error}',

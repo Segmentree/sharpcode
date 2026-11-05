@@ -406,9 +406,9 @@ Salida:  "Notable"
 
 def shipping(qty, unit_price):
     total = qty * unit_price
-    if total > 100: return round(total, 2)
-    if total >= 50: return round(total + 5, 2)
-    return round(total + 10, 2)
+    fee = 0 if total > 100 else 5 if total >= 50 else 10
+    r = round(total + fee, 2)
+    return int(r) if r == int(r) else r  # whole euros print as 55, not 55.0
 
 def gen_shipping():
     """Unit prices have at most 2 decimals; totals that land within a cent of a threshold (but not exactly on it)
@@ -459,7 +459,7 @@ Salida:  80
 
 3 × 25 = 75 €, que está entre 50 € y 100 €, así que el envío cuesta 5 € y el cliente paga 80 €.
 """,
-    cases([(3, 25), (1, 20), (10, 15), (2, 25), (4, 25)], gen_shipping, shipping),
+    cases([(3, 24.99), (1, 19.5), (10, 15.25), (4, 12.5), (4, 25)], gen_shipping, shipping),
     starter_body="return 0;")
 
 

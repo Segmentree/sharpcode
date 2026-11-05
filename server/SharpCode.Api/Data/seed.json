@@ -1361,22 +1361,22 @@
     ],
     "testCases": [
       {
-        "input": "[3, 25]",
-        "expected": "80",
+        "input": "[3, 24.99]",
+        "expected": "79.97",
         "isHidden": false
       },
       {
-        "input": "[1, 20]",
-        "expected": "30",
+        "input": "[1, 19.5]",
+        "expected": "29.5",
         "isHidden": false
       },
       {
-        "input": "[10, 15]",
-        "expected": "150",
+        "input": "[10, 15.25]",
+        "expected": "152.5",
         "isHidden": false
       },
       {
-        "input": "[2, 25]",
+        "input": "[4, 12.5]",
         "expected": "55",
         "isHidden": false
       },

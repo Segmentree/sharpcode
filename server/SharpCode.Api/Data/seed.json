@@ -1347,12 +1347,12 @@
     "className": "Solution",
     "timeLimitMs": 2000,
     "title": "Purchase with shipping costs",
-    "description": "Given the `quantity` of products bought and the purchase `amount` in euros, calculate the final amount the customer pays, including shipping:\n\n- If the purchase is over 100 €, shipping is free.\n- If the purchase is from 50 € to 100 € (inclusive), shipping costs 5 €.\n- If the purchase is under 50 €, shipping costs 10 €.\n\n**Example**\n\n```\nInput:  quantity = 3, amount = 75\nOutput: 80\n```\n",
+    "description": "Given the `quantity` of products bought and the `amount` (unit price) of each product in euros, calculate the final amount the customer pays, including shipping.\n\nThe purchase total is `quantity × amount`, and shipping depends on that total:\n\n- If the purchase is over 100 €, shipping is free.\n- If the purchase is from 50 € to 100 € (inclusive), shipping costs 5 €.\n- If the purchase is under 50 €, shipping costs 10 €.\n\n**Example**\n\n```\nInput:  quantity = 3, amount = 25\nOutput: 80\n```\n\n3 × 25 = 75 €, which is between 50 € and 100 €, so shipping costs 5 € and the customer pays 80 €.\n",
     "starterCode": "public class Solution\n{\n    public double TotalWithShipping(int quantity, double amount)\n    {\n        return 0;\n    }\n}\n",
     "translations": {
       "es": {
         "title": "Compra con gastos de envío",
-        "description": "Dada la `quantity` (cantidad) de productos comprados y el `amount` (importe) total de la compra en euros, calcula el importe final que debe pagar el cliente, incluyendo los gastos de envío:\n\n- Si la compra supera los 100 €, los gastos de envío son gratuitos.\n- Si la compra es de 50 € a 100 € (ambos incluidos), los gastos de envío son de 5 €.\n- Si la compra es inferior a 50 €, los gastos de envío son de 10 €.\n\n**Ejemplo**\n\n```\nEntrada: quantity = 3, amount = 75\nSalida:  80\n```\n"
+        "description": "Dada la `quantity` (cantidad) de productos comprados y el `amount` (precio unitario) de cada producto en euros, calcula el importe final que debe pagar el cliente, incluyendo los gastos de envío.\n\nEl importe de la compra es `quantity × amount`, y los gastos de envío dependen de ese importe:\n\n- Si la compra supera los 100 €, los gastos de envío son gratuitos.\n- Si la compra es de 50 € a 100 € (ambos incluidos), los gastos de envío son de 5 €.\n- Si la compra es inferior a 50 €, los gastos de envío son de 10 €.\n\n**Ejemplo**\n\n```\nEntrada: quantity = 3, amount = 25\nSalida:  80\n```\n\n3 × 25 = 75 €, que está entre 50 € y 100 €, así que el envío cuesta 5 € y el cliente paga 80 €.\n"
       }
     },
     "docLinks": [
@@ -1361,7 +1361,7 @@
     ],
     "testCases": [
       {
-        "input": "[3, 75]",
+        "input": "[3, 25]",
         "expected": "80",
         "isHidden": false
       },
@@ -1371,118 +1371,118 @@
         "isHidden": false
       },
       {
-        "input": "[10, 150]",
+        "input": "[10, 15]",
         "expected": "150",
         "isHidden": false
       },
       {
-        "input": "[2, 50]",
+        "input": "[2, 25]",
         "expected": "55",
         "isHidden": false
       },
       {
-        "input": "[4, 100]",
+        "input": "[4, 25]",
         "expected": "105",
         "isHidden": false
       },
       {
-        "input": "[6, 173.89]",
-        "expected": "173.89",
+        "input": "[6, 52.26]",
+        "expected": "313.56",
         "isHidden": true
       },
       {
-        "input": "[10, 116.93]",
-        "expected": "116.93",
+        "input": "[10, 35.37]",
+        "expected": "353.7",
         "isHidden": true
       },
       {
-        "input": "[6, 114.99]",
-        "expected": "114.99",
+        "input": "[6, 34.8]",
+        "expected": "208.8",
         "isHidden": true
       },
       {
-        "input": "[5, 20.48]",
-        "expected": "30.48",
+        "input": "[5, 6.78]",
+        "expected": "43.9",
         "isHidden": true
       },
       {
-        "input": "[11, 26.87]",
-        "expected": "36.870000000000005",
+        "input": "[11, 8.67]",
+        "expected": "100.37",
         "isHidden": true
       },
       {
-        "input": "[5, 174.27]",
-        "expected": "174.27",
+        "input": "[5, 52.37]",
+        "expected": "261.85",
         "isHidden": true
       },
       {
-        "input": "[1, 88.58]",
-        "expected": "93.58",
+        "input": "[1, 26.97]",
+        "expected": "36.97",
         "isHidden": true
       },
       {
-        "input": "[4, 13.69]",
-        "expected": "23.689999999999998",
+        "input": "[4, 4.76]",
+        "expected": "29.04",
         "isHidden": true
       },
       {
-        "input": "[5, 54.57]",
-        "expected": "59.57",
+        "input": "[5, 16.88]",
+        "expected": "89.4",
         "isHidden": true
       },
       {
-        "input": "[10, 74.99]",
-        "expected": "79.99",
+        "input": "[10, 22.94]",
+        "expected": "229.4",
         "isHidden": true
       },
       {
-        "input": "[6, 20.08]",
-        "expected": "30.08",
+        "input": "[6, 6.66]",
+        "expected": "49.96",
         "isHidden": true
       },
       {
-        "input": "[3, 100.74]",
-        "expected": "100.74",
+        "input": "[3, 30.57]",
+        "expected": "96.71",
         "isHidden": true
       },
       {
-        "input": "[5, 146.09]",
-        "expected": "146.09",
+        "input": "[5, 44.02]",
+        "expected": "220.1",
         "isHidden": true
       },
       {
-        "input": "[1, 78.54]",
-        "expected": "83.54",
+        "input": "[1, 23.99]",
+        "expected": "33.99",
         "isHidden": true
       },
       {
-        "input": "[6, 54.95]",
-        "expected": "59.95",
+        "input": "[6, 16.99]",
+        "expected": "101.94",
         "isHidden": true
       },
       {
-        "input": "[4, 118.11]",
-        "expected": "118.11",
+        "input": "[4, 35.72]",
+        "expected": "142.88",
         "isHidden": true
       },
       {
-        "input": "[2, 157.52]",
-        "expected": "157.52",
+        "input": "[2, 47.4]",
+        "expected": "99.8",
         "isHidden": true
       },
       {
-        "input": "[8, 123.09]",
-        "expected": "123.09",
+        "input": "[8, 37.2]",
+        "expected": "297.6",
         "isHidden": true
       },
       {
-        "input": "[2, 114.34]",
-        "expected": "114.34",
+        "input": "[2, 34.6]",
+        "expected": "74.2",
         "isHidden": true
       },
       {
-        "input": "[4, 119.07]",
-        "expected": "119.07",
+        "input": "[4, 36.01]",
+        "expected": "144.04",
         "isHidden": true
       }
     ]

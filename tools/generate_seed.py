@@ -404,14 +404,28 @@ Salida:  "Notable"
     starter_body='return "";')
 
 
-def shipping(qty, amount):
-    if amount > 100: return amount
-    if amount >= 50: return amount + 5
-    return amount + 10
+def shipping(qty, unit_price):
+    total = qty * unit_price
+    if total > 100: return round(total, 2)
+    if total >= 50: return round(total + 5, 2)
+    return round(total + 10, 2)
+
+def gen_shipping():
+    """Unit prices have at most 2 decimals; totals that land within a cent of a threshold (but not exactly on it)
+    are skipped so floating-point rounding can never flip the shipping tier."""
+    while True:
+        qty, price = random.randint(1, 12), round(random.uniform(1, 60), 2)
+        total = qty * price
+        if any(abs(total - edge) < 0.01 and abs(total - edge) > 1e-9 for edge in (50, 100)):
+            continue
+        return (qty, price)
+
 add("shipping-costs", "School", "Easy", "TotalWithShipping", "int quantity, double amount", "double",
     "Purchase with shipping costs",
     """
-Given the `quantity` of products bought and the purchase `amount` in euros, calculate the final amount the customer pays, including shipping:
+Given the `quantity` of products bought and the `amount` (unit price) of each product in euros, calculate the final amount the customer pays, including shipping.
+
+The purchase total is `quantity × amount`, and shipping depends on that total:
 
 - If the purchase is over 100 €, shipping is free.
 - If the purchase is from 50 € to 100 € (inclusive), shipping costs 5 €.
@@ -420,13 +434,17 @@ Given the `quantity` of products bought and the purchase `amount` in euros, calc
 **Example**
 
 ```
-Input:  quantity = 3, amount = 75
+Input:  quantity = 3, amount = 25
 Output: 80
 ```
+
+3 × 25 = 75 €, which is between 50 € and 100 €, so shipping costs 5 € and the customer pays 80 €.
 """,
     "Compra con gastos de envío",
     """
-Dada la `quantity` (cantidad) de productos comprados y el `amount` (importe) total de la compra en euros, calcula el importe final que debe pagar el cliente, incluyendo los gastos de envío:
+Dada la `quantity` (cantidad) de productos comprados y el `amount` (precio unitario) de cada producto en euros, calcula el importe final que debe pagar el cliente, incluyendo los gastos de envío.
+
+El importe de la compra es `quantity × amount`, y los gastos de envío dependen de ese importe:
 
 - Si la compra supera los 100 €, los gastos de envío son gratuitos.
 - Si la compra es de 50 € a 100 € (ambos incluidos), los gastos de envío son de 5 €.
@@ -435,12 +453,13 @@ Dada la `quantity` (cantidad) de productos comprados y el `amount` (importe) tot
 **Ejemplo**
 
 ```
-Entrada: quantity = 3, amount = 75
+Entrada: quantity = 3, amount = 25
 Salida:  80
 ```
+
+3 × 25 = 75 €, que está entre 50 € y 100 €, así que el envío cuesta 5 € y el cliente paga 80 €.
 """,
-    cases([(3, 75), (1, 20), (10, 150), (2, 50), (4, 100)],
-          lambda: (random.randint(1, 12), round(random.uniform(1, 200), 2)), shipping),
+    cases([(3, 25), (1, 20), (10, 15), (2, 25), (4, 25)], gen_shipping, shipping),
     starter_body="return 0;")
 
 

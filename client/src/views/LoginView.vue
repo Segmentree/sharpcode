@@ -75,5 +75,8 @@ h2 { margin: 0.25rem 0 0; }
 p { margin: 0; }
 .perks { text-align: left; margin: 0.5rem 0 0.75rem; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 0.25rem; }
 .small { font-size: 0.85rem; }
-.google-button { min-height: 44px; display: flex; justify-content: center; }
+/* The Google button is a cross-origin iframe with a light colour scheme. Browsers paint such an iframe opaque
+   white when the embedding element's scheme is dark, so the host opts back into light to keep it transparent. */
+.google-button { min-height: 44px; display: flex; justify-content: center; color-scheme: light; }
+.google-button :deep(iframe) { color-scheme: light; }
 </style>

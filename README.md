@@ -4,7 +4,8 @@ A small LeetCode-style app for C#: add problems with test cases, pick one, write
 solution in the browser, and have it compiled and judged against the test cases.
 The UI is available in English (default) and Spanish, problems are grouped into
 **School** (classroom exercises) and **Gym** (classic algorithm problems), and a
-**Sandbox** page runs free-form console programs with user-provided stdin.
+**Sandbox** page runs free-form console programs with user-provided stdin. Users sign in
+with Google; submissions, per-problem drafts and sandbox scripts are stored per user.
 
 ```
 client/   Vite + Vue 3 + TypeScript front end (CodeMirror editor, Markdown statements)
@@ -49,6 +50,26 @@ examples; every example is a complete console program that the **Open in sandbox
 into the Sandbox. Problems point to topics through `docLinks` (set in `tools/generate_seed.py`),
 shown as "Useful documentation" on the problem page. Seeded problems are re-synced from
 `seed.json` on every start, so the seed file is the source of truth for them.
+
+## Accounts
+
+Sign-in uses Google Identity Services on the client and the Google ID token is verified on
+the server (`Google.Apis.Auth`), which then issues its own bearer token (HS256 JWT, 30 days,
+refreshed on use). Anonymous visitors can read problems and docs; running, submitting, the
+sandbox, drafts and scripts require an account. Anyone with a Google account can sign in.
+
+Configuration:
+
+- `Google:ClientId` (`Google__ClientId`): the OAuth client id. Public, so it lives in
+  `fly.toml` and `appsettings.Development.json`. The Google Cloud OAuth client must list the
+  app origins (`http://localhost:5173`, `https://sharpcode-csharp.netlify.app`) under
+  *Authorized JavaScript origins*.
+- `Auth:Secret` (`Auth__Secret`): the JWT signing key, at least 32 characters. Required outside
+  Development (`fly secrets set Auth__Secret=…`); development falls back to a fixed value.
+
+Per user the database keeps `Submissions`, `ProblemDrafts` (autosaved editor contents, one
+per problem), `SandboxDrafts` (current sandbox program) and `SandboxScripts` (named
+programs). The `AddUsers` migration deleted the submissions that existed before accounts.
 
 ## Admin
 
@@ -111,12 +132,21 @@ dotnet ef migrations add <Name>
 | PUT | `/api/problems/{id}` | Admin: update; `testCases` replaces the whole set |
 | DELETE | `/api/problems/{id}` | Admin: delete a problem, its cases and submissions |
 | GET | `/api/admin/check` | 200 when the `X-Admin-Token` header is valid |
-| POST | `/api/complete` | Roslyn completions for the editor (`code`, `position`) |
-| POST | `/api/sandbox/run` | Compile and run a console program (`code`, `stdin`) |
-| POST | `/api/problems/{id}/run` | Compile and run the sample cases |
-| POST | `/api/problems/{id}/submit` | Compile, run all cases, record a submission |
-| GET | `/api/problems/{id}/submissions` | Submission history |
-| GET | `/api/submissions/{id}` | One submission with its full judge result |
+| GET | `/api/config` | Public configuration (`googleClientId`) |
+| POST | `/api/auth/google` | Exchange a Google ID token for a session (`token`, `user`) |
+| GET | `/api/auth/me` 🔒 | Current user; includes a fresh `token` when the old one is ageing |
+| POST | `/api/complete` 🔒 | Roslyn completions for the editor (`code`, `position`) |
+| POST | `/api/sandbox/run` 🔒 | Compile and run a console program (`code`, `stdin`) |
+| GET/PUT | `/api/sandbox/draft` 🔒 | The user's current sandbox program (`code`, `stdin`) |
+| GET/POST | `/api/sandbox/scripts` 🔒 | The user's named scripts (`name`, `code`, `stdin`) |
+| PUT/DELETE | `/api/sandbox/scripts/{id}` 🔒 | Update or delete a named script |
+| POST | `/api/problems/{id}/run` 🔒 | Compile and run the sample cases |
+| POST | `/api/problems/{id}/submit` 🔒 | Compile, run all cases, record a submission |
+| GET | `/api/problems/{id}/submissions` 🔒 | The user's submission history for a problem |
+| GET | `/api/submissions/{id}` 🔒 | One of the user's submissions with its full judge result |
+| GET/PUT/DELETE | `/api/problems/{id}/draft` 🔒 | The user's autosaved editor contents for a problem |
+
+🔒 requires `Authorization: Bearer <token>`.
 
 Problem payload:
 

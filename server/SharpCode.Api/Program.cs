@@ -20,9 +20,12 @@ builder.Services.ConfigureHttpJsonOptions(o =>
     o.SerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
 });
 builder.Services.AddCors(o => o.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
+builder.Services.AddSharpCodeAuth();
 
 var app = builder.Build();
 app.UseCors();
+app.UseAuthentication();
+app.UseAuthorization();
 
 using (var scope = app.Services.CreateScope())
 {
@@ -32,9 +35,48 @@ using (var scope = app.Services.CreateScope())
     Seed.Apply(db, app.Logger);
     if (string.IsNullOrEmpty(app.Configuration["Admin:Token"]))
         app.Logger.LogWarning("Admin:Token is not configured; problem editing is disabled");
+    if (!scope.ServiceProvider.GetRequiredService<AuthService>().Enabled)
+        app.Logger.LogWarning("Google:ClientId is not configured; sign-in is disabled");
 }
 
 var api = app.MapGroup("/api");
+// Everything a signed-in user owns (submissions, drafts, scripts, running code) lives under this group.
+var mine = app.MapGroup("/api").RequireAuthorization();
+
+// ---------- Config & auth ----------
+
+api.MapGet("/config", (AuthService auth) => new ConfigDto(auth.GoogleClientId));
+
+// Exchanges a Google ID token for this app's bearer token, creating the account on first sign-in.
+api.MapPost("/auth/google", async (GoogleSignInInput input, AuthService auth, AppDbContext db, CancellationToken ct) =>
+{
+    if (!auth.Enabled) return Results.Json(new { error = "Sign-in is not configured." }, statusCode: StatusCodes.Status503ServiceUnavailable);
+    var payload = await auth.ValidateGoogleTokenAsync(input.IdToken);
+    if (payload is null) return Results.Json(new { error = "Google sign-in could not be verified." }, statusCode: StatusCodes.Status401Unauthorized);
+
+    var user = await db.Users.FirstOrDefaultAsync(u => u.GoogleSubject == payload.Subject, ct);
+    if (user is null)
+    {
+        user = new User { GoogleSubject = payload.Subject, Email = payload.Email ?? "", Name = payload.Name ?? payload.Email ?? "User" };
+        db.Users.Add(user);
+    }
+    user.Email = payload.Email ?? user.Email;
+    user.Name = string.IsNullOrWhiteSpace(payload.Name) ? user.Name : payload.Name;
+    user.Picture = payload.Picture;
+    user.LastLoginAt = DateTime.UtcNow;
+    await db.SaveChangesAsync(ct);
+    return Results.Ok(new SessionDto(user.ToDto(), auth.CreateToken(user)));
+});
+
+// Who am I. Also hands back a fresh token when the current one is getting old, so active users stay signed in.
+mine.MapGet("/auth/me", async (HttpContext ctx, AuthService auth, AppDbContext db, CancellationToken ct) =>
+{
+    var user = await db.CurrentUserAsync(ctx.User, ct);
+    if (user is null) return Results.Unauthorized();
+    var issued = ctx.User.IssuedAt();
+    var refresh = issued is null || DateTime.UtcNow - issued > AuthService.RefreshAfter;
+    return Results.Ok(new SessionDto(user.ToDto(), refresh ? auth.CreateToken(user) : null));
+});
 
 // ---------- Admin ----------
 
@@ -42,9 +84,13 @@ api.MapGet("/admin/check", () => Results.Ok(new { ok = true })).RequireAdmin();
 
 // ---------- Problems ----------
 
-api.MapGet("/problems", async (string? lang, AppDbContext db) =>
+// Public. The "solved" tick is per user, so it is always false for anonymous visitors.
+api.MapGet("/problems", async (string? lang, HttpContext ctx, AppDbContext db) =>
 {
-    var solved = await db.Submissions.Where(s => s.Verdict == Verdict.Accepted).Select(s => s.ProblemId).Distinct().ToListAsync();
+    var userId = ctx.User.UserId();
+    var solved = userId is null
+        ? []
+        : await db.Submissions.Where(s => s.UserId == userId && s.Verdict == Verdict.Accepted).Select(s => s.ProblemId).Distinct().ToListAsync();
     var problems = await db.Problems.Include(p => p.Translations).Include(p => p.TestCases).OrderBy(p => p.Id).ToListAsync();
     return problems.Select(p => new ProblemSummaryDto(p.Id, p.Slug, Mapping.Localize(p, lang).Title, p.Difficulty, p.Category,
         p.TestCases.Count, solved.Contains(p.Id)));
@@ -101,7 +147,7 @@ api.MapDelete("/problems/{id:int}", async (int id, AppDbContext db) =>
 // ---------- Judge ----------
 
 // Run: executes only the visible (sample) cases, nothing is persisted. Quick feedback loop while coding.
-api.MapPost("/problems/{id:int}/run", async (int id, CodeInput input, AppDbContext db, JudgeService judge, CancellationToken ct) =>
+mine.MapPost("/problems/{id:int}/run", async (int id, CodeInput input, AppDbContext db, JudgeService judge, CancellationToken ct) =>
 {
     var problem = await db.Problems.Include(p => p.TestCases).FirstOrDefaultAsync(p => p.Id == id, ct);
     if (problem is null) return Results.NotFound();
@@ -111,7 +157,7 @@ api.MapPost("/problems/{id:int}/run", async (int id, CodeInput input, AppDbConte
 });
 
 // Submit: executes every case (hidden ones included) and records the submission.
-api.MapPost("/problems/{id:int}/submit", async (int id, CodeInput input, AppDbContext db, JudgeService judge, CancellationToken ct) =>
+mine.MapPost("/problems/{id:int}/submit", async (int id, CodeInput input, HttpContext ctx, AppDbContext db, JudgeService judge, CancellationToken ct) =>
 {
     var problem = await db.Problems.Include(p => p.TestCases).FirstOrDefaultAsync(p => p.Id == id, ct);
     if (problem is null) return Results.NotFound();
@@ -120,7 +166,7 @@ api.MapPost("/problems/{id:int}/submit", async (int id, CodeInput input, AppDbCo
 
     var submission = new Submission
     {
-        ProblemId = problem.Id, Code = input.Code, Verdict = result.Verdict,
+        ProblemId = problem.Id, UserId = ctx.User.RequiredUserId(), Code = input.Code, Verdict = result.Verdict,
         PassedCount = result.PassedCount, TotalCount = result.TotalCount,
         ResultJson = JsonSerializer.Serialize(result, JsonOpts),
     };
@@ -130,30 +176,119 @@ api.MapPost("/problems/{id:int}/submit", async (int id, CodeInput input, AppDbCo
         submission.TotalCount, submission.CreatedAt, submission.Code, result));
 });
 
-api.MapGet("/problems/{id:int}/submissions", async (int id, AppDbContext db) =>
-    await db.Submissions.Where(s => s.ProblemId == id).OrderByDescending(s => s.Id).Take(50)
-        .Select(s => new SubmissionDto(s.Id, s.ProblemId, s.Verdict, s.PassedCount, s.TotalCount, s.CreatedAt, s.Code, null))
-        .ToListAsync());
-
-api.MapGet("/submissions/{id:int}", async (int id, AppDbContext db) =>
+mine.MapGet("/problems/{id:int}/submissions", async (int id, HttpContext ctx, AppDbContext db) =>
 {
-    var s = await db.Submissions.FindAsync(id);
+    var userId = ctx.User.RequiredUserId();
+    return await db.Submissions.Where(s => s.ProblemId == id && s.UserId == userId).OrderByDescending(s => s.Id).Take(50)
+        .Select(s => new SubmissionDto(s.Id, s.ProblemId, s.Verdict, s.PassedCount, s.TotalCount, s.CreatedAt, s.Code, null))
+        .ToListAsync();
+});
+
+mine.MapGet("/submissions/{id:int}", async (int id, HttpContext ctx, AppDbContext db) =>
+{
+    var userId = ctx.User.RequiredUserId();
+    var s = await db.Submissions.FirstOrDefaultAsync(s => s.Id == id && s.UserId == userId);
     if (s is null) return Results.NotFound();
     var result = JsonSerializer.Deserialize<JudgeResult>(s.ResultJson, JsonOpts);
     return Results.Ok(new SubmissionDto(s.Id, s.ProblemId, s.Verdict, s.PassedCount, s.TotalCount, s.CreatedAt, s.Code, result));
 });
 
+// ---------- Problem drafts (autosaved editor contents, one per user and problem) ----------
+
+mine.MapGet("/problems/{id:int}/draft", async (int id, HttpContext ctx, AppDbContext db) =>
+{
+    var userId = ctx.User.RequiredUserId();
+    var d = await db.ProblemDrafts.FirstOrDefaultAsync(d => d.ProblemId == id && d.UserId == userId);
+    return d is null ? Results.NoContent() : Results.Ok(new DraftDto(d.Code, d.UpdatedAt));
+});
+
+mine.MapPut("/problems/{id:int}/draft", async (int id, DraftInput input, HttpContext ctx, AppDbContext db) =>
+{
+    if (!await db.Problems.AnyAsync(p => p.Id == id)) return Results.NotFound();
+    var userId = ctx.User.RequiredUserId();
+    var d = await db.ProblemDrafts.FirstOrDefaultAsync(d => d.ProblemId == id && d.UserId == userId);
+    if (d is null) db.ProblemDrafts.Add(d = new ProblemDraft { ProblemId = id, UserId = userId, Code = input.Code });
+    d.Code = input.Code;
+    d.UpdatedAt = DateTime.UtcNow;
+    await db.SaveChangesAsync();
+    return Results.Ok(new DraftDto(d.Code, d.UpdatedAt));
+});
+
+mine.MapDelete("/problems/{id:int}/draft", async (int id, HttpContext ctx, AppDbContext db) =>
+{
+    var userId = ctx.User.RequiredUserId();
+    await db.ProblemDrafts.Where(d => d.ProblemId == id && d.UserId == userId).ExecuteDeleteAsync();
+    return Results.NoContent();
+});
+
 // ---------- Editor support ----------
 
-api.MapPost("/complete", async (CompleteInput input, CodeCompletion completion, CancellationToken ct) =>
+mine.MapPost("/complete", async (CompleteInput input, CodeCompletion completion, CancellationToken ct) =>
     Results.Ok(await completion.CompleteAsync(input.Code ?? "", input.Position, ct)));
 
 // ---------- Sandbox ----------
 
-api.MapPost("/sandbox/run", async (SandboxInput input, SandboxService sandbox, CancellationToken ct) =>
+mine.MapPost("/sandbox/run", async (SandboxInput input, SandboxService sandbox, CancellationToken ct) =>
 {
     if (string.IsNullOrWhiteSpace(input.Code)) return Results.BadRequest(new { error = "Code is required." });
     return Results.Ok(await sandbox.RunAsync(input.Code, input.Stdin ?? "", ct));
+});
+
+// What is in the sandbox editor right now (autosaved).
+mine.MapGet("/sandbox/draft", async (HttpContext ctx, AppDbContext db) =>
+{
+    var d = await db.SandboxDrafts.FindAsync(ctx.User.RequiredUserId());
+    return d is null ? Results.NoContent() : Results.Ok(new SandboxDraftDto(d.Code, d.Stdin, d.UpdatedAt));
+});
+
+mine.MapPut("/sandbox/draft", async (SandboxDraftInput input, HttpContext ctx, AppDbContext db) =>
+{
+    var userId = ctx.User.RequiredUserId();
+    var d = await db.SandboxDrafts.FindAsync(userId);
+    if (d is null) db.SandboxDrafts.Add(d = new SandboxDraft { UserId = userId, Code = input.Code });
+    d.Code = input.Code;
+    d.Stdin = input.Stdin ?? "";
+    d.UpdatedAt = DateTime.UtcNow;
+    await db.SaveChangesAsync();
+    return Results.Ok(new SandboxDraftDto(d.Code, d.Stdin, d.UpdatedAt));
+});
+
+// Named scripts the user keeps.
+mine.MapGet("/sandbox/scripts", async (HttpContext ctx, AppDbContext db) =>
+{
+    var userId = ctx.User.RequiredUserId();
+    return await db.SandboxScripts.Where(s => s.UserId == userId).OrderByDescending(s => s.UpdatedAt)
+        .Select(s => new SandboxScriptDto(s.Id, s.Name, s.Code, s.Stdin, s.CreatedAt, s.UpdatedAt)).ToListAsync();
+});
+
+mine.MapPost("/sandbox/scripts", async (SandboxScriptInput input, HttpContext ctx, AppDbContext db) =>
+{
+    if (string.IsNullOrWhiteSpace(input.Name)) return Results.BadRequest(new { error = "Name is required." });
+    var s = new SandboxScript { UserId = ctx.User.RequiredUserId(), Name = input.Name.Trim(), Code = input.Code, Stdin = input.Stdin ?? "" };
+    db.SandboxScripts.Add(s);
+    await db.SaveChangesAsync();
+    return Results.Created($"/api/sandbox/scripts/{s.Id}", new SandboxScriptDto(s.Id, s.Name, s.Code, s.Stdin, s.CreatedAt, s.UpdatedAt));
+});
+
+mine.MapPut("/sandbox/scripts/{id:int}", async (int id, SandboxScriptInput input, HttpContext ctx, AppDbContext db) =>
+{
+    if (string.IsNullOrWhiteSpace(input.Name)) return Results.BadRequest(new { error = "Name is required." });
+    var userId = ctx.User.RequiredUserId();
+    var s = await db.SandboxScripts.FirstOrDefaultAsync(s => s.Id == id && s.UserId == userId);
+    if (s is null) return Results.NotFound();
+    s.Name = input.Name.Trim();
+    s.Code = input.Code;
+    s.Stdin = input.Stdin ?? "";
+    s.UpdatedAt = DateTime.UtcNow;
+    await db.SaveChangesAsync();
+    return Results.Ok(new SandboxScriptDto(s.Id, s.Name, s.Code, s.Stdin, s.CreatedAt, s.UpdatedAt));
+});
+
+mine.MapDelete("/sandbox/scripts/{id:int}", async (int id, HttpContext ctx, AppDbContext db) =>
+{
+    var userId = ctx.User.RequiredUserId();
+    var deleted = await db.SandboxScripts.Where(s => s.Id == id && s.UserId == userId).ExecuteDeleteAsync();
+    return deleted == 0 ? Results.NotFound() : Results.NoContent();
 });
 
 app.Run();

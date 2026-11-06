@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { api, type SandboxResult } from '../api'
+import { api, type SandboxResult, type SandboxScript } from '../api'
 import CodeEditor from '../components/CodeEditor.vue'
 import { findExample, pick } from '../docs/useDocs'
 import type { DocExample, DocTopic } from '../docs/types'
@@ -10,9 +10,6 @@ import type { DocExample, DocTopic } from '../docs/types'
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
-
-const CODE_KEY = 'sharpcode:sandbox:code'
-const STDIN_KEY = 'sharpcode:sandbox:stdin'
 
 const defaultCode = `// A small console program. Input comes from the "Standard input" box.
 Console.Write("What is your name? ");
@@ -26,69 +23,197 @@ Console.WriteLine($"Hello, {name}! Twice your number is {number * 2}.");
 `
 const defaultStdin = 'Ada\n21\n'
 
-function stored(key: string, fallback: string): string {
-  try {
-    return localStorage.getItem(key) ?? fallback
-  } catch {
-    return fallback
-  }
-}
-function store(key: string, value: string) {
-  try {
-    localStorage.setItem(key, value)
-  } catch {
-    /* ignore */
-  }
-}
-
-const code = ref(stored(CODE_KEY, defaultCode))
-const stdin = ref(stored(STDIN_KEY, defaultStdin))
+const code = ref(defaultCode)
+const stdin = ref(defaultStdin)
 const busy = ref(false)
+const loading = ref(true)
 const error = ref<string | null>(null)
 const result = ref<SandboxResult | null>(null)
 
-watch(code, (v) => store(CODE_KEY, v))
-watch(stdin, (v) => store(STDIN_KEY, v))
+// ---- Draft: whatever is in the editor, autosaved to the server for this user ----
+const DRAFT_DEBOUNCE_MS = 800
+let savedDraft = { code: '', stdin: '' }
+let draftTimer: ReturnType<typeof setTimeout> | null = null
+const draftState = ref<'idle' | 'saving' | 'saved' | 'error'>('idle')
+
+function draftChanged() {
+  return code.value !== savedDraft.code || stdin.value !== savedDraft.stdin
+}
+
+async function flushDraft() {
+  if (draftTimer) {
+    clearTimeout(draftTimer)
+    draftTimer = null
+  }
+  if (loading.value || !draftChanged()) return
+  const snapshot = { code: code.value, stdin: stdin.value }
+  draftState.value = 'saving'
+  try {
+    await api.saveSandboxDraft(snapshot.code, snapshot.stdin)
+    savedDraft = snapshot
+    draftState.value = draftChanged() ? 'idle' : 'saved'
+  } catch {
+    draftState.value = 'error'
+  }
+}
+
+watch([code, stdin], () => {
+  if (loading.value || !draftChanged()) return
+  draftState.value = 'idle'
+  if (draftTimer) clearTimeout(draftTimer)
+  draftTimer = setTimeout(flushDraft, DRAFT_DEBOUNCE_MS)
+})
+
+// ---- Named scripts ----
+const scripts = ref<SandboxScript[]>([])
+/** The saved script the editor was loaded from, if any. Edits mark it dirty until "Save" is pressed. */
+const currentId = ref<number | null>(null)
+const current = computed(() => scripts.value.find((s) => s.id === currentId.value) ?? null)
+const scriptDirty = computed(() => !!current.value && (current.value.code !== code.value || current.value.stdin !== stdin.value))
+const scriptBusy = ref(false)
+
+function applyScript(s: SandboxScript) {
+  currentId.value = s.id
+  code.value = s.code
+  stdin.value = s.stdin
+  result.value = null
+  error.value = null
+  loaded.value = null
+}
+
+function selectScript(e: Event) {
+  const value = (e.target as HTMLSelectElement).value
+  const s = scripts.value.find((x) => String(x.id) === value)
+  if (!s) {
+    currentId.value = null
+    return
+  }
+  // Unsaved edits to another script or to a fresh program would be lost (the draft is overwritten).
+  if ((current.value ? scriptDirty.value : code.value !== defaultCode) && !confirm(t('sandbox.scripts.confirmLoad', { name: s.name }))) {
+    ;(e.target as HTMLSelectElement).value = currentId.value === null ? '' : String(currentId.value)
+    return
+  }
+  applyScript(s)
+}
+
+async function withScriptBusy(fn: () => Promise<void>) {
+  scriptBusy.value = true
+  error.value = null
+  try {
+    await fn()
+  } catch (e) {
+    error.value = (e as Error).message
+  } finally {
+    scriptBusy.value = false
+  }
+}
+
+function saveScript() {
+  const cur = current.value
+  if (!cur) return saveScriptAs()
+  return withScriptBusy(async () => {
+    const updated = await api.updateScript(cur.id, cur.name, code.value, stdin.value)
+    scripts.value = [updated, ...scripts.value.filter((s) => s.id !== cur.id)]
+  })
+}
+
+function saveScriptAs() {
+  const name = prompt(t('sandbox.scripts.namePrompt'), current.value?.name ?? '')?.trim()
+  if (!name) return
+  return withScriptBusy(async () => {
+    const created = await api.createScript(name, code.value, stdin.value)
+    scripts.value = [created, ...scripts.value]
+    currentId.value = created.id
+  })
+}
+
+function renameScript() {
+  const cur = current.value
+  if (!cur) return
+  const name = prompt(t('sandbox.scripts.renamePrompt'), cur.name)?.trim()
+  if (!name || name === cur.name) return
+  return withScriptBusy(async () => {
+    const updated = await api.updateScript(cur.id, name, cur.code, cur.stdin)
+    scripts.value = scripts.value.map((s) => (s.id === cur.id ? updated : s))
+  })
+}
+
+function deleteScript() {
+  const cur = current.value
+  if (!cur || !confirm(t('sandbox.scripts.confirmDelete', { name: cur.name }))) return
+  return withScriptBusy(async () => {
+    await api.deleteScript(cur.id)
+    scripts.value = scripts.value.filter((s) => s.id !== cur.id)
+    currentId.value = null
+  })
+}
+
+function newScript() {
+  if ((current.value ? scriptDirty.value : code.value !== defaultCode) && !confirm(t('sandbox.confirmReset'))) return
+  currentId.value = null
+  code.value = defaultCode
+  stdin.value = defaultStdin
+  result.value = null
+  loaded.value = null
+}
 
 /** Example loaded from the docs via `?example=topic/id`; shown in a dismissible banner. */
 const loaded = ref<{ topic: DocTopic; example: DocExample } | null>(null)
 
-function loadExampleFromQuery() {
+function loadExampleFromQuery(): boolean {
   const raw = route.query.example
   const ref_ = Array.isArray(raw) ? raw[0] : raw
   const found = findExample(typeof ref_ === 'string' ? ref_ : undefined)
-  if (!found) return
+  if (!found) return false
+  currentId.value = null
   code.value = found.example.code
   stdin.value = found.example.stdin ?? ''
   result.value = null
   error.value = null
   loaded.value = found
-  // Drop the query so a reload keeps the user's edits (the drafts are persisted in localStorage).
+  // Drop the query so a reload keeps the user's edits (the draft is autosaved to the server).
   const { example: _example, ...rest } = route.query
   void _example
   router.replace({ path: route.path, query: rest })
+  return true
 }
 
-onMounted(loadExampleFromQuery)
-watch(() => route.query.example, loadExampleFromQuery)
+async function load() {
+  loading.value = true
+  try {
+    const [draft, list] = await Promise.all([api.getSandboxDraft(), api.listScripts()])
+    scripts.value = list
+    if (draft) {
+      code.value = draft.code
+      stdin.value = draft.stdin
+      savedDraft = { code: draft.code, stdin: draft.stdin }
+    }
+  } catch (e) {
+    error.value = (e as Error).message
+  } finally {
+    loading.value = false
+  }
+  // An example link wins over the stored draft (and is then autosaved as the new draft).
+  loadExampleFromQuery()
+}
+
+onMounted(load)
+watch(() => route.query.example, () => void loadExampleFromQuery())
+onBeforeUnmount(() => {
+  void flushDraft()
+})
 
 async function run() {
   busy.value = true
   error.value = null
   try {
+    await flushDraft()
     result.value = await api.sandboxRun(code.value, stdin.value)
   } catch (e) {
     error.value = (e as Error).message
   } finally {
     busy.value = false
   }
-}
-
-function reset() {
-  if (!confirm(t('sandbox.confirmReset'))) return
-  code.value = defaultCode
-  stdin.value = defaultStdin
-  result.value = null
 }
 
 // Reuse the workspace's verdict colours for sandbox statuses.
@@ -106,11 +231,27 @@ const statusClass: Record<SandboxResult['status'], string> = {
       <div class="editor panel">
         <div class="toolbar">
           <span class="muted small">{{ t('sandbox.program') }}</span>
+          <span v-if="draftState !== 'idle'" class="muted small draft" :class="draftState">{{ t(`sandbox.draft.${draftState}`) }}</span>
           <span class="spacer"></span>
-          <button type="button" class="sm" @click="reset">{{ t('sandbox.reset') }}</button>
-          <button type="button" class="sm primary" :disabled="busy" @click="run">
+          <button type="button" class="sm" @click="newScript">{{ t('sandbox.scripts.new') }}</button>
+          <button type="button" class="sm primary" :disabled="busy || loading" @click="run">
             {{ busy ? t('sandbox.running') : t('sandbox.run') }}
           </button>
+        </div>
+        <div class="toolbar scripts">
+          <label class="muted small" for="script-select">{{ t('sandbox.scripts.label') }}</label>
+          <select id="script-select" :value="currentId ?? ''" :disabled="scriptBusy || loading" @change="selectScript">
+            <option value="">{{ t('sandbox.scripts.none') }}</option>
+            <option v-for="s in scripts" :key="s.id" :value="String(s.id)">{{ s.name }}</option>
+          </select>
+          <span v-if="current && scriptDirty" class="muted small">{{ t('sandbox.scripts.modified') }}</span>
+          <span class="spacer"></span>
+          <button type="button" class="sm" :disabled="scriptBusy || loading || (!!current && !scriptDirty)" @click="saveScript">
+            {{ t('sandbox.scripts.save') }}
+          </button>
+          <button type="button" class="sm" :disabled="scriptBusy || loading" @click="saveScriptAs">{{ t('sandbox.scripts.saveAs') }}</button>
+          <button v-if="current" type="button" class="sm" :disabled="scriptBusy" @click="renameScript">{{ t('sandbox.scripts.rename') }}</button>
+          <button v-if="current" type="button" class="sm danger" :disabled="scriptBusy" @click="deleteScript">{{ t('sandbox.scripts.delete') }}</button>
         </div>
         <div class="editor-body">
           <CodeEditor v-model="code" :readonly="busy" />
@@ -196,6 +337,11 @@ const statusClass: Record<SandboxResult['status'], string> = {
 .stdin-body { padding: 0.6rem 0.75rem; display: flex; flex-direction: column; gap: 0.35rem; }
 .stdin-body textarea { font-family: var(--mono); }
 .hint { margin: 0; }
+.scripts { padding-top: 0.35rem; padding-bottom: 0.35rem; }
+.scripts select { max-width: 16rem; padding: 0.25rem 0.5rem; font-size: 0.85rem; }
+.draft { margin-left: 0.5rem; }
+.draft.saved { color: var(--green); }
+.draft.error { color: var(--red); }
 .intro { margin: 0 0 0.75rem; }
 .banner { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; padding: 0.5rem 0.75rem; border-radius: 8px; border: 1px solid rgba(124, 156, 255, 0.4); background: rgba(124, 156, 255, 0.1); font-size: 0.9rem; }
 .output-body { flex: 1; min-height: 0; overflow: auto; padding: 0.75rem; display: flex; flex-direction: column; gap: 0.6rem; }

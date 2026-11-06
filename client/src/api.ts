@@ -1,5 +1,6 @@
 import { locale } from './locale'
 import { adminToken, clearAdminToken } from './admin'
+import { onUnauthorized, token } from './auth'
 
 export type Difficulty = 'Easy' | 'Medium' | 'Hard'
 export type Category = 'School' | 'Gym'
@@ -135,6 +136,43 @@ export interface SandboxResult {
   durationMs: number
 }
 
+export interface User {
+  id: number
+  email: string
+  name: string
+  picture: string | null
+}
+
+export interface Session {
+  user: User
+  /** Present when the server hands out a new or refreshed bearer token. */
+  token?: string | null
+}
+
+export interface AppConfig {
+  googleClientId: string | null
+}
+
+export interface Draft {
+  code: string
+  updatedAt: string
+}
+
+export interface SandboxDraft {
+  code: string
+  stdin: string
+  updatedAt: string
+}
+
+export interface SandboxScript {
+  id: number
+  name: string
+  code: string
+  stdin: string
+  createdAt: string
+  updatedAt: string
+}
+
 export class ApiError extends Error {
   status: number
   constructor(status: number, message: string) {
@@ -151,10 +189,12 @@ interface RequestOptions extends RequestInit {
 async function request<T>(path: string, init?: RequestOptions): Promise<T> {
   const headers: Record<string, string> = { 'content-type': 'application/json' }
   if (init?.admin && adminToken.value) headers['X-Admin-Token'] = adminToken.value
+  if (token.value) headers.authorization = `Bearer ${token.value}`
   const { admin, ...rest } = init ?? {}
   const res = await fetch(`/api${path}`, { ...rest, headers: { ...headers, ...(rest.headers as Record<string, string> | undefined) } })
   if (!res.ok) {
     if (admin && res.status === 401) clearAdminToken()
+    else if (res.status === 401) onUnauthorized()
     let message = `${res.status} ${res.statusText}`
     try {
       const body = await res.json()
@@ -172,6 +212,11 @@ async function request<T>(path: string, init?: RequestOptions): Promise<T> {
 const lang = () => `lang=${encodeURIComponent(locale.value)}`
 
 export const api = {
+  // Session
+  getConfig: () => request<AppConfig>('/config'),
+  signInWithGoogle: (idToken: string) => request<Session>('/auth/google', { method: 'POST', body: JSON.stringify({ idToken }) }),
+  me: () => request<Session>('/auth/me'),
+
   // Localized reads
   listProblems: () => request<ProblemSummary[]>(`/problems?${lang()}`),
   getProblem: (idOrSlug: string | number) => request<Problem>(`/problems/${idOrSlug}?${lang()}`),
@@ -193,6 +238,12 @@ export const api = {
   listSubmissions: (id: number) => request<Submission[]>(`/problems/${id}/submissions`),
   getSubmission: (id: number) => request<Submission>(`/submissions/${id}`),
 
+  // Per-user editor draft of a problem (204 → undefined when there is none)
+  getDraft: (problemId: number) => request<Draft | undefined>(`/problems/${problemId}/draft`),
+  saveDraft: (problemId: number, code: string) =>
+    request<Draft>(`/problems/${problemId}/draft`, { method: 'PUT', body: JSON.stringify({ code }) }),
+  deleteDraft: (problemId: number) => request<void>(`/problems/${problemId}/draft`, { method: 'DELETE' }),
+
   // Editor support
   complete: (code: string, position: number, signal?: AbortSignal) =>
     request<CompletionResponse>('/complete', { method: 'POST', body: JSON.stringify({ code, position }), signal }),
@@ -200,6 +251,15 @@ export const api = {
   // Sandbox
   sandboxRun: (code: string, stdin: string) =>
     request<SandboxResult>('/sandbox/run', { method: 'POST', body: JSON.stringify({ code, stdin }) }),
+  getSandboxDraft: () => request<SandboxDraft | undefined>('/sandbox/draft'),
+  saveSandboxDraft: (code: string, stdin: string) =>
+    request<SandboxDraft>('/sandbox/draft', { method: 'PUT', body: JSON.stringify({ code, stdin }) }),
+  listScripts: () => request<SandboxScript[]>('/sandbox/scripts'),
+  createScript: (name: string, code: string, stdin: string) =>
+    request<SandboxScript>('/sandbox/scripts', { method: 'POST', body: JSON.stringify({ name, code, stdin }) }),
+  updateScript: (id: number, name: string, code: string, stdin: string) =>
+    request<SandboxScript>(`/sandbox/scripts/${id}`, { method: 'PUT', body: JSON.stringify({ name, code, stdin }) }),
+  deleteScript: (id: number) => request<void>(`/sandbox/scripts/${id}`, { method: 'DELETE' }),
 }
 
 /** i18n key for a verdict, e.g. `verdict.Accepted`. */

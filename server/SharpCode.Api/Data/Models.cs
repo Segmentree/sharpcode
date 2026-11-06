@@ -61,6 +61,8 @@ public sealed class Submission
     public int Id { get; set; }
     public int ProblemId { get; set; }
     public Problem? Problem { get; set; }
+    public int UserId { get; set; }
+    public User? User { get; set; }
     public required string Code { get; set; }
     public Verdict Verdict { get; set; }
     public int PassedCount { get; set; }
@@ -68,4 +70,52 @@ public sealed class Submission
     /// <summary>Serialized JudgeResult so the UI can replay old feedback.</summary>
     public required string ResultJson { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>An account created the first time a Google user signs in.</summary>
+public sealed class User
+{
+    public int Id { get; set; }
+    /// <summary>Google's stable account id (the "sub" claim). Emails can change, this cannot.</summary>
+    public required string GoogleSubject { get; set; }
+    public required string Email { get; set; }
+    public required string Name { get; set; }
+    public string? Picture { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime LastLoginAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>The code a user currently has in the editor of a problem, autosaved so nothing is lost between visits.</summary>
+public sealed class ProblemDraft
+{
+    public int Id { get; set; }
+    public int UserId { get; set; }
+    public User? User { get; set; }
+    public int ProblemId { get; set; }
+    public Problem? Problem { get; set; }
+    public required string Code { get; set; }
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>A sandbox program the user saved under a name.</summary>
+public sealed class SandboxScript
+{
+    public int Id { get; set; }
+    public int UserId { get; set; }
+    public User? User { get; set; }
+    public required string Name { get; set; }
+    public required string Code { get; set; }
+    public string Stdin { get; set; } = "";
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>What is currently in the sandbox editor, autosaved per user (one row per user).</summary>
+public sealed class SandboxDraft
+{
+    public int UserId { get; set; }
+    public User? User { get; set; }
+    public required string Code { get; set; }
+    public string Stdin { get; set; } = "";
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

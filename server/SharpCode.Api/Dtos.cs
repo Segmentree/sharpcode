@@ -45,6 +45,8 @@ public sealed record SubmissionDto(int Id, int ProblemId, Verdict Verdict, int P
 
 public static class Mapping
 {
+    public static UserDto ToDto(this User u) => new(u.Id, u.Email, u.Name, u.Picture);
+
     public const int VisibleCases = 5;
     public const int HiddenCases = 20;
 
@@ -85,3 +87,24 @@ public static class Mapping
         return slug.Trim('-');
     }
 }
+
+public sealed record ConfigDto(string? GoogleClientId);
+
+public sealed record GoogleSignInInput([property: Required] string IdToken);
+
+public sealed record UserDto(int Id, string Email, string Name, string? Picture);
+
+/// <param name="Token">Present when a (new or refreshed) bearer token is being handed to the client.</param>
+public sealed record SessionDto(UserDto User, string? Token);
+
+public sealed record DraftDto(string Code, DateTime UpdatedAt);
+
+public sealed record DraftInput([property: Required] string Code);
+
+public sealed record SandboxDraftDto(string Code, string Stdin, DateTime UpdatedAt);
+
+public sealed record SandboxDraftInput([property: Required] string Code, string? Stdin);
+
+public sealed record SandboxScriptDto(int Id, string Name, string Code, string Stdin, DateTime CreatedAt, DateTime UpdatedAt);
+
+public sealed record SandboxScriptInput([property: Required, MaxLength(80)] string Name, [property: Required] string Code, string? Stdin);

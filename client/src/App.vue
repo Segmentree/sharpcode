@@ -3,6 +3,7 @@ import { RouterLink, RouterView } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { locale, setLocale, SUPPORTED_LOCALES, type Locale } from './locale'
 import { ADMIN_UI_ENABLED, isAdmin } from './admin'
+import UserMenu from './components/UserMenu.vue'
 
 const { t } = useI18n()
 
@@ -25,6 +26,7 @@ function choose(l: Locale) {
       <RouterLink v-if="ADMIN_UI_ENABLED" to="/admin" class="admin-link" :class="{ on: isAdmin }">
         {{ isAdmin ? t('nav.adminSignedIn') : t('nav.admin') }}
       </RouterLink>
+      <UserMenu />
       <div class="lang" role="group" :aria-label="t('nav.language')">
         <button
           v-for="l in SUPPORTED_LOCALES"

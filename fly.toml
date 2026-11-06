@@ -7,6 +7,8 @@ primary_region = "ams"
 
 [env]
   Database__Path = "/data/sharpcode.db"
+  # Public OAuth client id (Google Identity Services); the JWT signing key is the Auth__Secret secret.
+  Google__ClientId = "336530778989-vhkbjaob384nboovp4i9d7qthu34s73u.apps.googleusercontent.com"
 
 [http_service]
   internal_port = 8080

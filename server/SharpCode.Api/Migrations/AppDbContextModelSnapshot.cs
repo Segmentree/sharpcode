@@ -73,6 +73,35 @@ namespace SharpCode.Api.Migrations
                     b.ToTable("Problems");
                 });
 
+            modelBuilder.Entity("SharpCode.Api.Data.ProblemDraft", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ProblemId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProblemId");
+
+                    b.HasIndex("UserId", "ProblemId")
+                        .IsUnique();
+
+                    b.ToTable("ProblemDrafts");
+                });
+
             modelBuilder.Entity("SharpCode.Api.Data.ProblemTranslation", b =>
                 {
                     b.Property<int>("Id")
@@ -102,6 +131,61 @@ namespace SharpCode.Api.Migrations
                     b.ToTable("ProblemTranslations");
                 });
 
+            modelBuilder.Entity("SharpCode.Api.Data.SandboxDraft", b =>
+                {
+                    b.Property<int>("UserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Stdin")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("SandboxDrafts");
+                });
+
+            modelBuilder.Entity("SharpCode.Api.Data.SandboxScript", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Stdin")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("SandboxScripts");
+                });
+
             modelBuilder.Entity("SharpCode.Api.Data.Submission", b =>
                 {
                     b.Property<int>("Id")
@@ -128,6 +212,9 @@ namespace SharpCode.Api.Migrations
                     b.Property<int>("TotalCount")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("UserId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Verdict")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -135,6 +222,8 @@ namespace SharpCode.Api.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ProblemId");
+
+                    b.HasIndex("UserId", "ProblemId");
 
                     b.ToTable("Submissions");
                 });
@@ -169,6 +258,60 @@ namespace SharpCode.Api.Migrations
                     b.ToTable("TestCases");
                 });
 
+            modelBuilder.Entity("SharpCode.Api.Data.User", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("GoogleSubject")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("LastLoginAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Picture")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GoogleSubject")
+                        .IsUnique();
+
+                    b.ToTable("Users");
+                });
+
+            modelBuilder.Entity("SharpCode.Api.Data.ProblemDraft", b =>
+                {
+                    b.HasOne("SharpCode.Api.Data.Problem", "Problem")
+                        .WithMany()
+                        .HasForeignKey("ProblemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SharpCode.Api.Data.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Problem");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("SharpCode.Api.Data.ProblemTranslation", b =>
                 {
                     b.HasOne("SharpCode.Api.Data.Problem", "Problem")
@@ -180,6 +323,28 @@ namespace SharpCode.Api.Migrations
                     b.Navigation("Problem");
                 });
 
+            modelBuilder.Entity("SharpCode.Api.Data.SandboxDraft", b =>
+                {
+                    b.HasOne("SharpCode.Api.Data.User", "User")
+                        .WithOne()
+                        .HasForeignKey("SharpCode.Api.Data.SandboxDraft", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("SharpCode.Api.Data.SandboxScript", b =>
+                {
+                    b.HasOne("SharpCode.Api.Data.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("SharpCode.Api.Data.Submission", b =>
                 {
                     b.HasOne("SharpCode.Api.Data.Problem", "Problem")
@@ -188,7 +353,15 @@ namespace SharpCode.Api.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("SharpCode.Api.Data.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.Navigation("Problem");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("SharpCode.Api.Data.TestCase", b =>
